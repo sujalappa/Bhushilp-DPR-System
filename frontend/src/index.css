@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  /* Tailwind's text-* utilities are rem-based off this — bumping it scales
+     the whole app's type a little larger uniformly, without touching every
+     component's className. */
+  font-size: 18px;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* A faint navy-to-amber tint instead of flat white/gray — visible as a
+     wash behind the white cards, not a loud background. */
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 320px, #fdf6e9 100%) fixed;
+  color: #0f172a;
+}
+
+/* Large enough tap targets everywhere by default — this app is used on
+   phones in the field, not just desktop. */
+input, select, textarea, button {
+  font-size: 1rem;
+}
