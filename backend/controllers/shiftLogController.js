@@ -33,7 +33,7 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   const { ShiftLog, Vehicle } = req.projectModels;
   const {
     date, shift, vehicleId, driverId, status,
-    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark,
+    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark, totalTripsManual,
   } = req.body;
 
   if (!date || !shift || !vehicleId) {
@@ -49,6 +49,9 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   }
   if (resolvedStatus === 'working' && !driverId) {
     throw new AppError('A driver is required to log a working shift segment', 400);
+  }
+  if (resolvedStatus === 'working' && (totalTripsManual === '' || totalTripsManual == null)) {
+    throw new AppError('Total Trips is required for a working shift segment', 400);
   }
 
   // Normalized to `null` (never `undefined`) so every request that omits a
@@ -68,6 +71,11 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   // Numeric fields only meaningful when the vehicle actually ran this shift.
   if (resolvedStatus === 'working') {
     Object.assign(setFields, { startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose });
+    // The count that drives every calculation (OB Rehandling, the driver
+    // rewards leaderboard) — required, and always wins over however many
+    // individual Trip rows happen to exist below (those are detail records
+    // only, e.g. loading/unloading time per trip; they're never counted).
+    setFields.totalTripsManual = Number(totalTripsManual);
   }
 
   const log = await ShiftLog.findOneAndUpdate(
@@ -84,4 +92,18 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: log });
 });
 
-module.exports = { listShiftLogs, getShiftLog, upsertShiftLog };
+// Removes one driver's segment (and its trips) for this vehicle+shift only —
+// e.g. a driver picked by mistake. Never touches the Driver/Vehicle master
+// records, so the name stays available (and correct) for every other shift.
+const deleteShiftLog = asyncHandler(async (req, res) => {
+  const { ShiftLog, Trip } = req.projectModels;
+  const log = await ShiftLog.findById(req.params.shiftLogId);
+  if (!log) throw new AppError('Shift log not found', 404);
+
+  await Trip.deleteMany({ shiftLogId: log._id });
+  await log.deleteOne();
+
+  res.status(200).json({ success: true, data: { _id: req.params.shiftLogId } });
+});
+
+module.exports = { listShiftLogs, getShiftLog, upsertShiftLog, deleteShiftLog };

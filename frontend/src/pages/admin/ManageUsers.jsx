@@ -88,13 +88,16 @@ export default function ManageUsers() {
 
 function AccessEditor({ user, projects, onSaved }) {
   const [assignments, setAssignments] = useState(user.assignments);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
   const hasForm = (projectId, formSlug) =>
     assignments.some((a) => a.projectId === projectId && a.forms.includes(formSlug));
 
   const toggle = (projectId, formSlug) => {
+    setSaved(false);
     setAssignments((prev) => {
       const existing = prev.find((a) => a.projectId === projectId);
       if (!existing) {
@@ -116,6 +119,8 @@ function AccessEditor({ user, projects, onSaved }) {
     setError('');
     try {
       await usersApi.setAssignments(user._id, assignments);
+      setEditing(false);
+      setSaved(true);
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -145,8 +150,9 @@ function AccessEditor({ user, projects, onSaved }) {
                 <td key={f.slug} className="py-2 text-center">
                   <input
                     type="checkbox"
-                    className="h-5 w-5"
+                    className="h-5 w-5 disabled:opacity-50"
                     checked={hasForm(p._id, f.slug)}
+                    disabled={!editing}
                     onChange={() => toggle(p._id, f.slug)}
                   />
                 </td>
@@ -157,10 +163,19 @@ function AccessEditor({ user, projects, onSaved }) {
       </table>
 
       <ErrorBanner message={error} />
+      {saved && !editing && <p className="mt-3 text-sm text-green-700">Saved.</p>}
 
-      <Button className="mt-3" onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving…' : 'Save access'}
-      </Button>
+      <div className="mt-3 flex items-center gap-3">
+        {editing ? (
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save access'}
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

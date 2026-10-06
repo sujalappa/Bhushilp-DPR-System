@@ -3,8 +3,17 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { withComputed } = require('./dailyProductionController');
 const { withComputed: withFuelComputed } = require('./fuelController');
+const { getShiftTripTotal } = require('../utils/tripCount');
 
 const toDateOnly = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+
+// Stored as "HH:mm" 24-hour; shown as "2:30 PM" to match how it was entered.
+function toTime12h(value) {
+  if (!value) return '';
+  const [h, m] = value.split(':').map(Number);
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
 
 function buildDateFilter(query) {
   const { from, to } = query;
@@ -35,8 +44,8 @@ async function fetchTripRows(models, query) {
     Vehicle: t.vehicleId?.name || '',
     Driver: t.driverId?.name || 'No driver assigned',
     'Trip No': t.snNo,
-    'Loading Time': t.loadingTime || '',
-    'Unloading Time': t.unloadingTime || '',
+    'Loading Time': toTime12h(t.loadingTime),
+    'Unloading Time': toTime12h(t.unloadingTime),
     'Machine No': t.machineVehicleId?.name || '',
     'Loading Point': t.loadingPointId?.name || '',
     Remarks: t.remarks || '',
@@ -54,7 +63,7 @@ async function fetchShiftLogRows(models, query) {
     'Date', 'Shift', 'Vehicle', 'Driver', 'Status',
     'Starting KM', 'Closing KM', 'Total KM',
     'Starting Hrs', 'Closing Hrs', 'Total Hrs',
-    'Fuel Open', 'Fuel Close', 'Remark',
+    'Fuel Open', 'Fuel Close', 'Total Trips', 'Remark',
   ];
   const rows = logs.map((l) => ({
     Date: toDateOnly(l.date),
@@ -70,6 +79,7 @@ async function fetchShiftLogRows(models, query) {
     'Total Hrs': l.startHrs != null && l.closeHrs != null ? l.closeHrs - l.startHrs : '',
     'Fuel Open': l.fuelOpen ?? '',
     'Fuel Close': l.fuelClose ?? '',
+    'Total Trips': l.totalTripsManual ?? '',
     Remark: l.remark || '',
   }));
   return { columns, rows };
@@ -92,8 +102,9 @@ async function fetchProductionRows(models, query) {
   const entries = await models.DailyProduction.find(buildDateFilter(query)).sort({ date: 1, shift: 1 });
 
   const columns = ['Date', 'Shift', 'Hard OB', 'Soft OB', 'OB Rehandling', 'Total Cum', 'Target', 'Achievement %', 'Remarks'];
-  const rows = entries.map((e) => {
-    const c = withComputed(e);
+  const rows = await Promise.all(entries.map(async (e) => {
+    const tripCount = await getShiftTripTotal(models, e.date, e.shift);
+    const c = withComputed(e, tripCount);
     return {
       Date: toDateOnly(c.date),
       Shift: c.shift,
@@ -105,7 +116,7 @@ async function fetchProductionRows(models, query) {
       'Achievement %': c.achievementPct ?? '',
       Remarks: c.remark || '',
     };
-  });
+  }));
   return { columns, rows };
 }
 

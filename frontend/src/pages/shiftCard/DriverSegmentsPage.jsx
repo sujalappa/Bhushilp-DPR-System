@@ -39,6 +39,22 @@ export default function DriverSegmentsPage() {
   const openSegment = (driverId) =>
     navigate(`/projects/${projectId}/shift-card/${date}/${shift}/${vehicleId}/${driverId || 'none'}`);
 
+  // Removes just this shift's entry for that driver (and its trips) — the
+  // Driver master record itself is untouched, so it's still there to pick
+  // for a different shift or if this one was added by mistake.
+  const deleteSegment = async (segment, label) => {
+    if (!window.confirm(`Delete this shift entry for "${label}"? Its trips for this shift will be removed too. The driver record itself is kept.`)) {
+      return;
+    }
+    setError('');
+    try {
+      await shiftCardApi.deleteShiftLog(projectId, segment._id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const noDriverSegment = segments?.find((s) => !s.driverId);
   const driverSegments = segments?.filter((s) => s.driverId) || [];
   const availableDrivers = drivers.filter((d) => !driverSegments.some((s) => s.driverId._id === d._id));
@@ -59,20 +75,29 @@ export default function DriverSegmentsPage() {
       ) : (
         <div className="space-y-2">
           {driverSegments.map((s) => (
-            <button
+            <div
               key={s._id}
-              onClick={() => openSegment(s.driverId._id)}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-brand-300"
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-brand-300"
             >
-              <span className="font-medium text-slate-900">{s.driverId.name}</span>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  s.status === 'working' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                {s.status === 'working' ? 'Working' : 'Non-working'}
-              </span>
-            </button>
+              <button onClick={() => openSegment(s.driverId._id)} className="flex-1 text-left">
+                <span className="font-medium text-slate-900">{s.driverId.name}</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    s.status === 'working' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {s.status === 'working' ? 'Working' : 'Non-working'}
+                </span>
+                <button
+                  className="text-sm font-medium text-red-600"
+                  onClick={() => deleteSegment(s, s.driverId.name)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           ))}
 
           {driverSegments.length === 0 && !noDriverSegment && (
@@ -82,15 +107,22 @@ export default function DriverSegmentsPage() {
           )}
 
           {noDriverSegment && (
-            <button
-              onClick={() => openSegment(null)}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-brand-300"
-            >
-              <span className="font-medium text-slate-900">No driver assigned</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                Non-working
-              </span>
-            </button>
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-brand-300">
+              <button onClick={() => openSegment(null)} className="flex-1 text-left">
+                <span className="font-medium text-slate-900">No driver assigned</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                  Non-working
+                </span>
+                <button
+                  className="text-sm font-medium text-red-600"
+                  onClick={() => deleteSegment(noDriverSegment, 'No driver assigned')}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

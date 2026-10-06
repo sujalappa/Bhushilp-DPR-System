@@ -24,6 +24,15 @@ const shiftLogSchema = new mongoose.Schema(
     closeHrs: Number,
     fuelOpen: Number,
     fuelClose: Number,
+    // The trip count for this driver segment, written down directly by
+    // whoever reviews the card — required for every working segment
+    // (enforced in the controller). This is the ONLY number every
+    // trip-count calculation uses (OB Rehandling, the driver rewards
+    // leaderboard — see utils/tripCount.getShiftTripTotal). Individual Trip
+    // documents below are detail records only (loading/unloading time,
+    // machine, loading point per trip) and are never counted towards a
+    // total — matching how the real paper process was actually filled in.
+    totalTripsManual: { type: Number, min: 0 },
     remark: { type: String, trim: true }, // required in practice when status is 'non-working' (enforced in controller)
     // Lives in the central DB (different connection) — stored as a plain id,
     // not populate-able via `ref` across connections.

@@ -19,10 +19,11 @@ export default function FuelVehicleFormPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLocked(false);
     Promise.all([mastersApi.listVehicles(projectId, { active: true }), fuelApi.listFuelLogs(projectId, date)])
       .then(([vehicles, logs]) => {
         if (cancelled) return;
@@ -52,7 +53,6 @@ export default function FuelVehicleFormPage() {
   const handleSave = async () => {
     setSaving(true);
     setError('');
-    setSaved(false);
     try {
       const payload = {
         date,
@@ -66,7 +66,7 @@ export default function FuelVehicleFormPage() {
       };
       const result = await fuelApi.upsertFuelLog(projectId, payload);
       setComputed({ dieselConsumed: result.dieselConsumed, fuelPerKm: result.fuelPerKm });
-      setSaved(true);
+      setLocked(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -81,86 +81,108 @@ export default function FuelVehicleFormPage() {
       <p className="mb-4 text-sm text-slate-500">{date}</p>
 
       <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-        {/* Fuel Issued first and on its own — it's the one field the real
-            paper process actually always fills in; the rest are optional
-            extras for a site that wants full reconciliation. */}
-        <Field label="Fuel Issued (litres)">
-          <input
-            type="number"
-            inputMode="decimal"
-            autoFocus
-            className={inputClass()}
-            value={form.fuelIssued}
-            onChange={(e) => update({ fuelIssued: e.target.value })}
-          />
-        </Field>
+        {locked ? (
+          <div className="space-y-3 text-center">
+            <p className="text-lg font-semibold text-green-700">✓ Saved</p>
+            {(computed.dieselConsumed !== null || computed.fuelPerKm !== null) && (
+              <p className="text-sm text-slate-600">
+                {computed.dieselConsumed !== null && <>Diesel Consumed: {computed.dieselConsumed} L</>}
+                {computed.dieselConsumed !== null && computed.fuelPerKm !== null && ' · '}
+                {computed.fuelPerKm !== null && <>{computed.fuelPerKm} L/KM</>}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setLocked(false)}>
+                Edit
+              </Button>
+              <Button className="flex-1" onClick={() => navigate(`/projects/${projectId}/fuel`)}>
+                Back to Vehicles
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Fuel Issued first and on its own — it's the one field the real
+                paper process actually always fills in; the rest are optional
+                extras for a site that wants full reconciliation. */}
+            <Field label="Fuel Issued (litres)">
+              <input
+                type="number"
+                inputMode="decimal"
+                autoFocus
+                className={inputClass()}
+                value={form.fuelIssued}
+                onChange={(e) => update({ fuelIssued: e.target.value })}
+              />
+            </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Opening KM (optional)">
-            <input
-              type="number"
-              inputMode="decimal"
-              className={inputClass()}
-              value={form.openingKm}
-              onChange={(e) => update({ openingKm: e.target.value })}
-            />
-          </Field>
-          <Field label="Closing KM (optional)">
-            <input
-              type="number"
-              inputMode="decimal"
-              className={inputClass()}
-              value={form.closingKm}
-              onChange={(e) => update({ closingKm: e.target.value })}
-            />
-          </Field>
-          <Field label="Opening Fuel (optional)">
-            <input
-              type="number"
-              inputMode="decimal"
-              className={inputClass()}
-              value={form.openingFuel}
-              onChange={(e) => update({ openingFuel: e.target.value })}
-            />
-          </Field>
-          <Field label="Closing Fuel (optional)">
-            <input
-              type="number"
-              inputMode="decimal"
-              className={inputClass()}
-              value={form.closingFuel}
-              onChange={(e) => update({ closingFuel: e.target.value })}
-            />
-          </Field>
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Opening KM (optional)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className={inputClass()}
+                  value={form.openingKm}
+                  onChange={(e) => update({ openingKm: e.target.value })}
+                />
+              </Field>
+              <Field label="Closing KM (optional)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className={inputClass()}
+                  value={form.closingKm}
+                  onChange={(e) => update({ closingKm: e.target.value })}
+                />
+              </Field>
+              <Field label="Opening Fuel (optional)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className={inputClass()}
+                  value={form.openingFuel}
+                  onChange={(e) => update({ openingFuel: e.target.value })}
+                />
+              </Field>
+              <Field label="Closing Fuel (optional)">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className={inputClass()}
+                  value={form.closingFuel}
+                  onChange={(e) => update({ closingFuel: e.target.value })}
+                />
+              </Field>
+            </div>
 
-        {(computed.dieselConsumed !== null || computed.fuelPerKm !== null) && (
-          <p className="text-sm text-slate-500">
-            {computed.dieselConsumed !== null && <>Diesel Consumed: {computed.dieselConsumed} L</>}
-            {computed.dieselConsumed !== null && computed.fuelPerKm !== null && ' · '}
-            {computed.fuelPerKm !== null && <>{computed.fuelPerKm} L/KM</>}
-          </p>
+            {(computed.dieselConsumed !== null || computed.fuelPerKm !== null) && (
+              <p className="text-sm text-slate-500">
+                {computed.dieselConsumed !== null && <>Diesel Consumed: {computed.dieselConsumed} L</>}
+                {computed.dieselConsumed !== null && computed.fuelPerKm !== null && ' · '}
+                {computed.fuelPerKm !== null && <>{computed.fuelPerKm} L/KM</>}
+              </p>
+            )}
+
+            <Field label="Remarks (optional)">
+              <input className={inputClass()} value={form.remark} onChange={(e) => update({ remark: e.target.value })} />
+            </Field>
+
+            <ErrorBanner message={error} />
+
+            <div className="flex gap-2">
+              <Button className="flex-1" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => navigate(`/projects/${projectId}/fuel`)}
+              >
+                Done
+              </Button>
+            </div>
+          </>
         )}
-
-        <Field label="Remarks (optional)">
-          <input className={inputClass()} value={form.remark} onChange={(e) => update({ remark: e.target.value })} />
-        </Field>
-
-        <ErrorBanner message={error} />
-        {saved && <p className="text-sm text-green-700">Saved.</p>}
-
-        <div className="flex gap-2">
-          <Button className="flex-1" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
-            onClick={() => navigate(`/projects/${projectId}/fuel`)}
-          >
-            Done
-          </Button>
-        </div>
       </div>
     </AppShell>
   );

@@ -13,7 +13,22 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
+// In development Vite picks whichever port is free (5173, 5174, …) depending
+// on what else is running, so any localhost origin is allowed. Outside
+// development only CLIENT_ORIGIN is.
+const isLocalhost = (origin) => /^http:\/\/localhost:\d+$/.test(origin);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowed =
+        !origin ||
+        origin === process.env.CLIENT_ORIGIN ||
+        (process.env.NODE_ENV === 'development' && isLocalhost(origin));
+      callback(null, allowed);
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 

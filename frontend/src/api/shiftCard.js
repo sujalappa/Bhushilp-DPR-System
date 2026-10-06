@@ -19,6 +19,9 @@ export const getShiftLog = (projectId, shiftLogId) =>
 export const upsertShiftLog = (projectId, payload) =>
   client.post(`/projects/${projectId}/shift-logs`, payload).then((r) => r.data.data);
 
+export const deleteShiftLog = (projectId, shiftLogId) =>
+  client.delete(`/projects/${projectId}/shift-logs/${shiftLogId}`);
+
 export const listTrips = (projectId, shiftLogId) =>
   client.get(`/projects/${projectId}/shift-logs/${shiftLogId}/trips`).then((r) => r.data.data);
 

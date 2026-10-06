@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import * as productionApi from '../../api/production';
 import AppShell from '../../components/AppShell';
 import Button from '../../components/Button';
@@ -24,32 +24,31 @@ export default function ProductionDatePage() {
   );
 }
 
-const emptyForm = { hardOB: '', softOB: '', obRehandling: '', target: '', remark: '' };
+const emptyForm = { hardOB: 0, target: 0, remark: '' };
 
 function ProductionForm({ projectId, date, shift }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
-  const [computed, setComputed] = useState({ totalCum: 0, achievementPct: null });
+  const [computed, setComputed] = useState({ obRehandling: 0, totalCum: 0, achievementPct: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setSaved(false);
+    setLocked(false);
     productionApi
       .getProduction(projectId, date, shift)
       .then((d) => {
         if (cancelled) return;
         setForm({
-          hardOB: d.hardOB ?? '',
-          softOB: d.softOB ?? '',
-          obRehandling: d.obRehandling ?? '',
-          target: d.target ?? '',
+          hardOB: d.hardOB ?? 0,
+          target: d.target ?? 0,
           remark: d.remark || '',
         });
-        setComputed({ totalCum: d.totalCum, achievementPct: d.achievementPct });
+        setComputed({ obRehandling: d.obRehandling, totalCum: d.totalCum, achievementPct: d.achievementPct });
       })
       .catch((err) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
@@ -63,20 +62,17 @@ function ProductionForm({ projectId, date, shift }) {
   const handleSave = async () => {
     setSaving(true);
     setError('');
-    setSaved(false);
     try {
       const payload = {
         date,
         shift,
-        hardOB: form.hardOB === '' ? undefined : Number(form.hardOB),
-        softOB: form.softOB === '' ? undefined : Number(form.softOB),
-        obRehandling: form.obRehandling === '' ? undefined : Number(form.obRehandling),
+        hardOB: form.hardOB === '' ? 0 : Number(form.hardOB),
         target: form.target === '' ? undefined : Number(form.target),
         remark: form.remark || undefined,
       };
       const saved = await productionApi.upsertProduction(projectId, payload);
-      setComputed({ totalCum: saved.totalCum, achievementPct: saved.achievementPct });
-      setSaved(true);
+      setComputed({ obRehandling: saved.obRehandling, totalCum: saved.totalCum, achievementPct: saved.achievementPct });
+      setLocked(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -85,6 +81,26 @@ function ProductionForm({ projectId, date, shift }) {
   };
 
   if (loading) return <Spinner full />;
+
+  if (locked) {
+    return (
+      <div className="space-y-4 rounded-lg border border-green-200 bg-green-50 p-6 text-center">
+        <p className="text-lg font-semibold text-green-700">✓ Saved</p>
+        <p className="text-sm text-slate-600">
+          Total Cum: {computed.totalCum}
+          {computed.achievementPct !== null && <> · Achievement: {computed.achievementPct}%</>}
+        </p>
+        <div className="flex gap-2 pt-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setLocked(false)}>
+            Edit
+          </Button>
+          <Button className="flex-1" onClick={() => navigate(`/projects/${projectId}`)}>
+            Back to Projects
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -98,22 +114,16 @@ function ProductionForm({ projectId, date, shift }) {
             onChange={(e) => update({ hardOB: e.target.value })}
           />
         </Field>
-        <Field label="Soft OB">
-          <input
-            type="number"
-            inputMode="decimal"
-            className={inputClass()}
-            value={form.softOB}
-            onChange={(e) => update({ softOB: e.target.value })}
-          />
+        <Field label="Soft OB" hint="Not in use yet — rehandling formula will move here later">
+          <input type="number" className={`${inputClass()} bg-slate-100 text-slate-400`} value={0} disabled readOnly />
         </Field>
-        <Field label="OB Rehandling">
+        <Field label="OB Rehandling" hint="Auto: 14 x trips logged this shift">
           <input
             type="number"
-            inputMode="decimal"
-            className={inputClass()}
-            value={form.obRehandling}
-            onChange={(e) => update({ obRehandling: e.target.value })}
+            className={`${inputClass()} bg-slate-100 text-slate-400`}
+            value={computed.obRehandling ?? 0}
+            disabled
+            readOnly
           />
         </Field>
         <Field label="Target (optional)">
@@ -137,7 +147,6 @@ function ProductionForm({ projectId, date, shift }) {
       </Field>
 
       <ErrorBanner message={error} />
-      {saved && <p className="text-sm text-green-700">Saved.</p>}
 
       <Button className="w-full" onClick={handleSave} disabled={saving}>
         {saving ? 'Saving…' : 'Save'}
