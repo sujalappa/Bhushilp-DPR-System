@@ -3,7 +3,9 @@ import axios from 'axios';
 // withCredentials so the httpOnly session cookie is sent/received —
 // the backend never uses a bearer token, only the cookie.
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  // Unset in production: the app calls its own /api, which vercel.json
+  // forwards to the backend, so the login cookie stays on one domain.
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
 });
 
