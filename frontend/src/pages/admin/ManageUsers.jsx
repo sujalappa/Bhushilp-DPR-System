@@ -6,11 +6,12 @@ import Button from '../../components/Button';
 import Field, { inputClass } from '../../components/Field';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
-import { ALL_FORMS } from '../../utils/forms';
+import { formsForProjectType, PROJECT_TYPES } from '../../utils/forms';
 
-// Only implemented forms get a column here — no point granting access to
-// something that doesn't exist yet.
-const FORMS = ALL_FORMS.filter((f) => f.implemented);
+// Only the forms that exist for that kind of project, and only ones that
+// are built — no point granting access to something that isn't there.
+const grantableForms = (project) => formsForProjectType(project.type).filter((f) => f.implemented);
+const typeLabel = (type) => PROJECT_TYPES.find((t) => t.value === type)?.label || type;
 
 export default function ManageUsers() {
   const [users, setUsers] = useState(null);
@@ -131,23 +132,17 @@ function AccessEditor({ user, projects, onSaved }) {
 
   return (
     <div className="border-t border-slate-200 p-4">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-slate-500">
-            <th className="pb-2 font-normal">Project</th>
-            {FORMS.map((f) => (
-              <th key={f.slug} className="pb-2 text-center font-normal">
-                {f.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((p) => (
-            <tr key={p._id} className="border-t border-slate-100">
-              <td className="py-2">{p.name}</td>
-              {FORMS.map((f) => (
-                <td key={f.slug} className="py-2 text-center">
+      {/* One block per project rather than a grid: different kinds of
+          project have different forms, so there are no shared columns. */}
+      <div className="space-y-3">
+        {projects.map((p) => (
+          <div key={p._id} className="rounded-lg border border-slate-100 p-3">
+            <div className="mb-2 text-sm font-medium text-slate-900">
+              {p.name} <span className="font-normal text-slate-400">· {typeLabel(p.type)}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {grantableForms(p).map((f) => (
+                <label key={f.slug} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     className="h-5 w-5 disabled:opacity-50"
@@ -155,12 +150,14 @@ function AccessEditor({ user, projects, onSaved }) {
                     disabled={!editing}
                     onChange={() => toggle(p._id, f.slug)}
                   />
-                </td>
+                  {f.label}
+                </label>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </div>
+          </div>
+        ))}
+        {projects.length === 0 && <p className="text-sm text-slate-500">No projects yet.</p>}
+      </div>
 
       <ErrorBanner message={error} />
       {saved && !editing && <p className="mt-3 text-sm text-green-700">Saved.</p>}

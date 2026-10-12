@@ -3,7 +3,9 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { withComputed } = require('./dailyProductionController');
 const { withComputed: withFuelComputed } = require('./fuelController');
+const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugProductionController');
 const { getShiftTripTotal } = require('../utils/tripCount');
+const { crewPopulate, crewNames } = require('../utils/crew');
 
 const toDateOnly = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
 
@@ -144,31 +146,110 @@ async function fetchFuelRows(models, query) {
   return { columns, rows };
 }
 
-const FETCHERS = {
-  trips: fetchTripRows,
-  shiftLogs: fetchShiftLogRows,
-  shiftStatus: fetchShiftStatusRows,
-  production: fetchProductionRows,
-  fuel: fetchFuelRows,
-};
+// Who did each job, as comma-separated names. Expects the crew populated.
+const crewNameColumns = (entry) => ({
+  'Driller Names': crewNames(entry, 'drillerIds'),
+  'Helper Names': crewNames(entry, 'helperIds'),
+  'Mucker Names': crewNames(entry, 'muckerIds'),
+  'Blaster Names': crewNames(entry, 'blasterIds'),
+});
+
+async function fetchUgProductionRows(models, query) {
+  const entries = await models.UgProduction.find(buildDateFilter(query))
+    .populate('levelId', LEVEL_FIELDS)
+    .populate('supervisorId', 'name')
+    .populate(crewPopulate)
+    .sort({ date: 1, shift: 1, createdAt: 1 });
+
+  const columns = [
+    'Date', 'Shift', 'Level', 'Supervisor Name',
+    'Supervisor', 'Driller', 'Helper', 'Mucker', 'Blaster', 'Total Manpower',
+    'Tubs', 'Tons', 'M3', 'OMS',
+    'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
+  ];
+  const rows = entries.map((e) => {
+    const c = withUgProductionComputed(e);
+    return {
+      Date: toDateOnly(c.date),
+      Shift: c.shift,
+      Level: c.levelId?.name || '',
+      'Supervisor Name': c.supervisorId?.name || '',
+      Supervisor: c.supervisors ?? '',
+      Driller: c.drillers ?? '',
+      Helper: c.helpers ?? '',
+      Mucker: c.muckers ?? '',
+      Blaster: c.blasters ?? '',
+      'Total Manpower': c.totalManpower,
+      Tubs: c.tubs,
+      Tons: c.tons,
+      M3: c.cubicMetres,
+      OMS: c.oms ?? '',
+      ...crewNameColumns(c),
+      Remark: c.remark || '',
+    };
+  });
+  return { columns, rows };
+}
+
+async function fetchUgDevelopmentRows(models, query) {
+  const entries = await models.UgDevelopment.find(buildDateFilter(query))
+    .populate({ path: 'headingId', populate: { path: 'levelId', select: 'name' } })
+    .populate(crewPopulate)
+    .sort({ date: 1, shift: 1, createdAt: 1 });
+
+  const columns = [
+    'Date', 'Shift', 'Level', 'Heading',
+    'Supervisor', 'Driller', 'Helper', 'Blaster', 'Mucker',
+    'Tons', 'Filling', 'Progress (m)',
+    'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
+  ];
+  const rows = entries.map((e) => ({
+    Date: toDateOnly(e.date),
+    Shift: e.shift,
+    Level: e.headingId?.levelId?.name || '',
+    Heading: e.headingId?.name || '',
+    Supervisor: e.supervisors ?? '',
+    Driller: e.drillers ?? '',
+    Helper: e.helpers ?? '',
+    Blaster: e.blasters ?? '',
+    Mucker: e.muckers ?? '',
+    Tons: e.tons ?? '',
+    Filling: e.filling ?? '',
+    'Progress (m)': e.progress ?? '',
+    ...crewNameColumns(e),
+    Remark: e.remark || '',
+  }));
+  return { columns, rows };
+}
+
+// Which datasets a project has depends on its type. `key` is what the
+// preview endpoint is asked for; `sheet` is the tab name in the workbook.
+const OPEN_CAST_DATASETS = [
+  { key: 'trips', sheet: 'Fleet Trip Count', fetch: fetchTripRows },
+  { key: 'shiftLogs', sheet: 'Vehicle Shift Log', fetch: fetchShiftLogRows },
+  { key: 'shiftStatus', sheet: 'Shift Status', fetch: fetchShiftStatusRows },
+  { key: 'production', sheet: 'Daily Production', fetch: fetchProductionRows },
+  { key: 'fuel', sheet: 'Fuel Consumption', fetch: fetchFuelRows },
+];
+const UNDERGROUND_DATASETS = [
+  { key: 'ugProduction', sheet: 'Level Production', fetch: fetchUgProductionRows },
+  { key: 'ugDevelopment', sheet: 'Development', fetch: fetchUgDevelopmentRows },
+  { key: 'shiftStatus', sheet: 'Shift Status', fetch: fetchShiftStatusRows },
+];
+const datasetsFor = (project) => (project.type === 'underground' ? UNDERGROUND_DATASETS : OPEN_CAST_DATASETS);
 
 const getPreview = asyncHandler(async (req, res) => {
-  const { type } = req.query;
-  const fetcher = FETCHERS[type];
-  if (!fetcher) throw new AppError('type must be one of: trips, shiftLogs, shiftStatus, production, fuel', 400);
+  const datasets = datasetsFor(req.project);
+  const dataset = datasets.find((d) => d.key === req.query.type);
+  if (!dataset) throw new AppError(`type must be one of: ${datasets.map((d) => d.key).join(', ')}`, 400);
 
-  const { columns, rows } = await fetcher(req.projectModels, req.query);
+  const { columns, rows } = await dataset.fetch(req.projectModels, req.query, req.project);
   res.status(200).json({ success: true, data: { columns, rows } });
 });
 
 const downloadExcel = asyncHandler(async (req, res) => {
-  const [trips, shiftLogs, shiftStatus, production, fuel] = await Promise.all([
-    fetchTripRows(req.projectModels, req.query),
-    fetchShiftLogRows(req.projectModels, req.query),
-    fetchShiftStatusRows(req.projectModels, req.query),
-    fetchProductionRows(req.projectModels, req.query),
-    fetchFuelRows(req.projectModels, req.query),
-  ]);
+  const datasets = datasetsFor(req.project);
+  const results = await Promise.all(datasets.map((d) => d.fetch(req.projectModels, req.query, req.project)));
 
   const workbook = new ExcelJS.Workbook();
   const addSheet = (name, { columns, rows }) => {
@@ -178,11 +259,7 @@ const downloadExcel = asyncHandler(async (req, res) => {
     rows.forEach((r) => sheet.addRow(r));
   };
 
-  addSheet('Fleet Trip Count', trips);
-  addSheet('Vehicle Shift Log', shiftLogs);
-  addSheet('Shift Status', shiftStatus);
-  addSheet('Daily Production', production);
-  addSheet('Fuel Consumption', fuel);
+  datasets.forEach((d, i) => addSheet(d.sheet, results[i]));
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${req.project.name.replace(/[^a-z0-9]/gi, '_')}_export.xlsx"`);

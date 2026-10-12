@@ -7,32 +7,37 @@ import Button from '../components/Button';
 import Field, { inputClass } from '../components/Field';
 import ErrorBanner from '../components/ErrorBanner';
 import Spinner from '../components/Spinner';
-
-const TYPES = [
-  { value: 'mining', label: 'Mining' },
-  { value: 'exploration', label: 'Exploration' },
-];
+import { PROJECT_TYPES as TYPES } from '../utils/forms';
 
 export default function ProjectList() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [type, setType] = useState('mining');
-  const [projects, setProjects] = useState(null);
+  // null until the user picks a tab; until then the page opens on the first
+  // tab that has a project for them, so someone assigned only to an
+  // underground mine doesn't land on an empty Open Cast list.
+  const [pickedType, setPickedType] = useState(null);
+  const [allProjects, setAllProjects] = useState(null);
   const [error, setError] = useState('');
   const [showNewProject, setShowNewProject] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const load = () => {
-    projectsApi
-      .listProjects(type)
-      .then(setProjects)
-      .catch((err) => setError(err.message));
-  };
-
+  // Every project the user can see is loaded once and the tabs filter it
+  // locally, so switching tabs is instant and can't show a stale list.
   useEffect(() => {
-    setProjects(null);
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+    let cancelled = false;
+    projectsApi
+      .listProjects()
+      .then((list) => !cancelled && setAllProjects(list))
+      .catch((err) => !cancelled && setError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const firstTypeWithProjects = TYPES.find((t) => allProjects?.some((p) => p.type === t.value))?.value;
+  const type = pickedType || firstTypeWithProjects || TYPES[0].value;
+  const setType = setPickedType;
+  const projects = allProjects?.filter((p) => p.type === type) ?? null;
 
   // Opens the project's card picker (ProjectFormsPage) — more cards
   // (Daily Production next) land there as they're built.
@@ -45,7 +50,7 @@ export default function ProjectList() {
           <button
             key={t.value}
             onClick={() => setType(t.value)}
-            className={`rounded-full px-4 py-2 text-sm font-medium ${
+            className={`whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium ${
               type === t.value ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-300'
             }`}
           >
@@ -60,7 +65,7 @@ export default function ProjectList() {
 
       {projects?.length === 0 && (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
-          No {type} projects yet.
+          No {TYPES.find((t) => t.value === type).label} projects yet.
         </p>
       )}
 
@@ -86,9 +91,11 @@ export default function ProjectList() {
           ) : (
             <NewProjectForm
               defaultType={type}
-              onCreated={() => {
+              onCreated={(created) => {
                 setShowNewProject(false);
-                load();
+                // Show the tab the new project went into.
+                setPickedType(created.type);
+                setReloadKey((k) => k + 1);
               }}
               onCancel={() => setShowNewProject(false)}
             />
@@ -111,8 +118,7 @@ function NewProjectForm({ defaultType, onCreated, onCancel }) {
     setSubmitting(true);
     setError('');
     try {
-      await projectsApi.createProject({ name, type, location });
-      onCreated();
+      onCreated(await projectsApi.createProject({ name, type, location }));
     } catch (err) {
       setError(err.message);
     } finally {

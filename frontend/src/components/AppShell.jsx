@@ -14,20 +14,22 @@ export default function AppShell({ title, backTo, children }) {
           <div className="mb-1 text-xs font-medium tracking-wide text-brand-200">
             Bhushilp Mines and Minerals Pvt. Ltd.
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          {/* The title gives way (wraps) before the buttons do, so a long
+              page name can't squash "Admin" and "Log out" on a phone. */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               {backTo && (
                 <button
                   onClick={() => navigate(backTo)}
                   aria-label="Back"
-                  className="rounded-md p-1 text-brand-100 hover:bg-white/10"
+                  className="shrink-0 rounded-md p-1 text-brand-100 hover:bg-white/10"
                 >
                   ←
                 </button>
               )}
-              <h1 className="text-lg font-semibold text-white">{title}</h1>
+              <h1 className="min-w-0 break-words text-lg font-semibold leading-tight text-white">{title}</h1>
             </div>
-            <div className="flex items-center gap-3 text-sm text-brand-100">
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-brand-100">
               {/* A dropdown, not two more `hidden sm:inline` links — those
                   would be unreachable on a phone, which is this app's
                   primary device. */}
@@ -57,6 +59,13 @@ export default function AppShell({ title, backTo, children }) {
                           className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
                         >
                           Export Data
+                        </Link>
+                        <Link
+                          to="/admin/analysis"
+                          onClick={() => setAdminMenuOpen(false)}
+                          className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Analysis
                         </Link>
                       </div>
                     </>

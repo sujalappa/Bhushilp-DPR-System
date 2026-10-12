@@ -15,6 +15,29 @@ export const listDrivers = (projectId, params = {}) =>
 export const createDriver = (projectId, payload) =>
   client.post(path(projectId, 'drivers'), payload).then((r) => r.data.data);
 
+// Underground projects
+export const listLevels = (projectId, params = {}) =>
+  client.get(path(projectId, 'levels'), { params }).then((r) => r.data.data);
+export const createLevel = (projectId, payload) =>
+  client.post(path(projectId, 'levels'), payload).then((r) => r.data.data);
+export const updateLevel = (projectId, levelId, payload) =>
+  client.patch(`${path(projectId, 'levels')}/${levelId}`, payload).then((r) => r.data.data);
+
+export const listSupervisors = (projectId, params = {}) =>
+  client.get(path(projectId, 'supervisors'), { params }).then((r) => r.data.data);
+export const createSupervisor = (projectId, payload) =>
+  client.post(path(projectId, 'supervisors'), payload).then((r) => r.data.data);
+
+export const listWorkers = (projectId, params = {}) =>
+  client.get(path(projectId, 'workers'), { params }).then((r) => r.data.data);
+export const createWorker = (projectId, payload) =>
+  client.post(path(projectId, 'workers'), payload).then((r) => r.data.data);
+
+export const listHeadings = (projectId, params = {}) =>
+  client.get(path(projectId, 'headings'), { params }).then((r) => r.data.data);
+export const createHeading = (projectId, payload) =>
+  client.post(path(projectId, 'headings'), payload).then((r) => r.data.data);
+
 export const listLoadingPoints = (projectId, params = {}) =>
   client.get(path(projectId, 'loading-points'), { params }).then((r) => r.data.data);
 export const createLoadingPoint = (projectId, payload) =>

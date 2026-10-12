@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth, getLandingPath } from './context/AuthContext';
 import { RequireAuth, RequireSuperAdmin, RequireFormAccess } from './routes/ProtectedRoute';
@@ -9,8 +10,14 @@ import ProjectFormsPage from './pages/ProjectFormsPage';
 import ShiftCardPage from './pages/shiftCard/ShiftCardPage';
 import ProductionDatePage from './pages/production/ProductionDatePage';
 import FuelPage from './pages/fuel/FuelPage';
+import LevelProductionPage from './pages/underground/LevelProductionPage';
+import DevelopmentPage from './pages/underground/DevelopmentPage';
 import ManageUsers from './pages/admin/ManageUsers';
 import DataExport from './pages/admin/DataExport';
+
+// Loaded on demand: it pulls in the charting library, which is larger than
+// the rest of the app put together and only superadmins ever open it.
+const Analysis = lazy(() => import('./pages/admin/Analysis'));
 
 function Landing() {
   const { user, loading } = useAuth();
@@ -71,6 +78,23 @@ export default function App() {
           />
 
           <Route
+            path="/projects/:projectId/ug-production"
+            element={
+              <RequireFormAccess formSlug="ug-production">
+                <LevelProductionPage />
+              </RequireFormAccess>
+            }
+          />
+          <Route
+            path="/projects/:projectId/ug-development"
+            element={
+              <RequireFormAccess formSlug="ug-development">
+                <DevelopmentPage />
+              </RequireFormAccess>
+            }
+          />
+
+          <Route
             path="/admin/users"
             element={
               <RequireSuperAdmin>
@@ -83,6 +107,17 @@ export default function App() {
             element={
               <RequireSuperAdmin>
                 <DataExport />
+              </RequireSuperAdmin>
+            }
+          />
+
+          <Route
+            path="/admin/analysis"
+            element={
+              <RequireSuperAdmin>
+                <Suspense fallback={<Spinner full />}>
+                  <Analysis />
+                </Suspense>
               </RequireSuperAdmin>
             }
           />

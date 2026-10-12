@@ -18,6 +18,8 @@ const assignmentSchema = new mongoose.Schema(
           'production',
           'utilization',
           'site-monitoring',
+          'ug-production',
+          'ug-development',
         ],
         required: true,
       },

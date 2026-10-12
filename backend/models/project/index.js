@@ -12,4 +12,11 @@ module.exports = {
   ShiftStatus: require('./ShiftStatus'),
   DailyProduction: require('./DailyProduction'),
   FuelLog: require('./FuelLog'),
+  // Underground projects
+  Level: require('./Level'),
+  Supervisor: require('./Supervisor'),
+  Worker: require('./Worker'),
+  Heading: require('./Heading'),
+  UgProduction: require('./UgProduction'),
+  UgDevelopment: require('./UgDevelopment'),
 };

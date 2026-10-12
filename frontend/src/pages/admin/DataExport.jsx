@@ -7,13 +7,21 @@ import Field, { inputClass } from '../../components/Field';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 
-const TABS = [
+// Mirrors the datasets the backend offers per project type
+// (exportController.datasetsFor).
+const OPEN_CAST_TABS = [
   { key: 'trips', label: 'Trips' },
   { key: 'shiftLogs', label: 'Shift Logs' },
   { key: 'shiftStatus', label: 'Shift Status' },
   { key: 'production', label: 'Production' },
   { key: 'fuel', label: 'Fuel' },
 ];
+const UNDERGROUND_TABS = [
+  { key: 'ugProduction', label: 'Level Production' },
+  { key: 'ugDevelopment', label: 'Development' },
+  { key: 'shiftStatus', label: 'Shift Status' },
+];
+const tabsFor = (project) => (project?.type === 'underground' ? UNDERGROUND_TABS : OPEN_CAST_TABS);
 
 export default function DataExport() {
   const [projects, setProjects] = useState(null);
@@ -30,10 +38,22 @@ export default function DataExport() {
       .listProjects()
       .then((list) => {
         setProjects(list);
-        if (list.length > 0) setProjectId(list[0]._id);
+        if (list.length > 0) {
+          setProjectId(list[0]._id);
+          setTab(tabsFor(list[0])[0].key);
+        }
       })
       .catch((err) => setError(err.message));
   }, []);
+
+  const project = projects?.find((p) => p._id === projectId);
+  const tabs = tabsFor(project);
+
+  // Switching project also switches to a tab that project actually has.
+  const selectProject = (id) => {
+    setProjectId(id);
+    setTab(tabsFor(projects.find((p) => p._id === id))[0].key);
+  };
 
   const loadPreview = () => {
     if (!projectId) return;
@@ -48,7 +68,6 @@ export default function DataExport() {
   useEffect(loadPreview, [projectId, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownload = async () => {
-    const project = projects.find((p) => p._id === projectId);
     setDownloading(true);
     setError('');
     try {
@@ -67,7 +86,7 @@ export default function DataExport() {
       ) : (
         <div className="space-y-4">
           <Field label="Project">
-            <select className={inputClass()} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <select className={inputClass()} value={projectId} onChange={(e) => selectProject(e.target.value)}>
               {projects.map((p) => (
                 <option key={p._id} value={p._id}>
                   {p.name}
@@ -88,8 +107,8 @@ export default function DataExport() {
             Apply date range
           </Button>
 
-          <div className="flex gap-2">
-            {TABS.map((t) => (
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
@@ -144,7 +163,7 @@ export default function DataExport() {
           )}
 
           <Button variant="accent" className="w-full" onClick={handleDownload} disabled={downloading || !projectId}>
-            {downloading ? 'Preparing file…' : 'Download full Excel backup (all 3 sheets)'}
+            {downloading ? 'Preparing file…' : `Download full Excel backup (${tabs.length} sheets)`}
           </Button>
         </div>
       )}

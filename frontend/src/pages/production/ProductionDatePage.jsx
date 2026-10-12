@@ -4,6 +4,7 @@ import * as productionApi from '../../api/production';
 import AppShell from '../../components/AppShell';
 import Button from '../../components/Button';
 import Field, { inputClass } from '../../components/Field';
+import NumberField from '../../components/NumberField';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import DateShiftPicker from '../../components/DateShiftPicker';
@@ -105,15 +106,7 @@ function ProductionForm({ projectId, date, shift }) {
   return (
     <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Hard OB">
-          <input
-            type="number"
-            inputMode="decimal"
-            className={inputClass()}
-            value={form.hardOB}
-            onChange={(e) => update({ hardOB: e.target.value })}
-          />
-        </Field>
+        <NumberField label="Hard OB" value={form.hardOB} onChange={(hardOB) => update({ hardOB })} />
         <Field label="Soft OB" hint="Not in use yet — rehandling formula will move here later">
           <input type="number" className={`${inputClass()} bg-slate-100 text-slate-400`} value={0} disabled readOnly />
         </Field>
@@ -126,15 +119,7 @@ function ProductionForm({ projectId, date, shift }) {
             readOnly
           />
         </Field>
-        <Field label="Target (optional)">
-          <input
-            type="number"
-            inputMode="decimal"
-            className={inputClass()}
-            value={form.target}
-            onChange={(e) => update({ target: e.target.value })}
-          />
-        </Field>
+        <NumberField label="Target (optional)" value={form.target} onChange={(target) => update({ target })} />
       </div>
 
       <p className="text-sm text-slate-500">

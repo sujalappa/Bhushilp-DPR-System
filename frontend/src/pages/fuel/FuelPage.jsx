@@ -10,6 +10,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import PickOrAdd from '../../components/PickOrAdd';
 import { todayIso } from '../../utils/date';
+import { entryCount } from '../../utils/shift';
 
 // Daily fuel on one page: date at the top, one entry form, and the list of
 // what's already saved for that date underneath. There's no shift here —
@@ -107,7 +108,10 @@ function FuelEntries({ projectId, date }) {
     setError('');
   };
 
-  const setField = (key) => (value) => setFields((f) => ({ ...f, [key]: value }));
+  const setField = (key) => (value) => {
+    setFields((f) => ({ ...f, [key]: value }));
+    setError('');
+  };
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const handleSave = async () => {
@@ -227,7 +231,8 @@ function FuelEntries({ projectId, date }) {
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-600">
-          Saved for this date ({logs.length}){logs.length > 0 && ` · ${totalIssued} L issued`}
+          Saved for {date} · {entryCount(logs.length)}
+          {logs.length > 0 && ` · ${totalIssued} L issued`}
         </h2>
 
         {logs.length === 0 ? (

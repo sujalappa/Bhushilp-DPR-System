@@ -20,6 +20,21 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
     underneath. One entry per date+shift+vehicle+driver.
   - **Daily Production** — one entry per date+shift.
   - **Daily Fuel Consumption** — one page, one entry per date+vehicle.
+- **Underground projects have their own forms.** A project's type (Open
+  Cast, Underground, Exploration) decides which forms it shows:
+  - **Level Production** — one entry per date+shift+level+supervisor (a
+    gang): head counts and tubs. Tons, m³ and OMS are calculated from that
+    level's own conversion factors, shown under the level picker on the
+    form, where the superadmin can edit them.
+  - **Development** — one entry per date+shift+heading (e.g. "-170 Ore
+    Drive"): head counts, ore or rock tons, filling and metres of progress,
+    with a running total per heading.
+  - On both, the supervisor can also name who the drillers, helpers,
+    muckers and blasters were, picked from one shared list of workers.
+- **Superadmin Analysis** (`/admin/analysis`) — charts over a project's
+  entries for a chosen period (production, manpower, trips, fuel,
+  development progress), each with a table view of the same figures. The
+  charts follow the project's type, like its forms.
 - **Superadmin Data Export** (`/admin/export`) — on-page spreadsheet view
   plus a full multi-sheet Excel download, across all projects, for backup.
 

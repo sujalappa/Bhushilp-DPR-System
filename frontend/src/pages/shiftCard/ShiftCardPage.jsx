@@ -12,6 +12,8 @@ import PickOrAdd from '../../components/PickOrAdd';
 import DateShiftPicker from '../../components/DateShiftPicker';
 import TripDetails from './TripDetails';
 import { LOADING_MACHINE_CATEGORIES } from '../../utils/vehicleCategories';
+import { withReferenced, upsertById } from '../../utils/options';
+import { shiftLabel, entryCount } from '../../utils/shift';
 
 // The whole shift card on one page: date + shift at the top (shared
 // picker), one entry form, and the list of what's already saved for that
@@ -48,21 +50,6 @@ const fieldsFromLog = (log) => ({
 // actually clears it.
 const toNumberOrNull = (v) => (v === '' ? null : Number(v));
 const difference = (start, close) => (start !== '' && close !== '' ? Number(close) - Number(start) : null);
-
-// Options for a dropdown: the active master list, plus anything already
-// referenced by a saved entry (e.g. a since-deactivated vehicle), so an
-// existing entry can always be reopened.
-function withReferenced(list, referenced) {
-  const seen = new Set(list.map((x) => x._id));
-  const extras = [];
-  referenced.forEach((x) => {
-    if (x && !seen.has(x._id)) {
-      seen.add(x._id);
-      extras.push(x);
-    }
-  });
-  return [...list, ...extras];
-}
 
 function describe(log) {
   return `${log.vehicleId?.name || 'Vehicle'} · ${log.driverId?.name || 'No driver'}`;
@@ -148,7 +135,10 @@ function ShiftEntries({ projectId, date, shift }) {
     setError('');
   };
 
-  const setField = (key) => (value) => setFields((f) => ({ ...f, [key]: value }));
+  const setField = (key) => (value) => {
+    setFields((f) => ({ ...f, [key]: value }));
+    setError('');
+  };
 
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -182,7 +172,7 @@ function ShiftEntries({ projectId, date, shift }) {
       }
 
       const saved = await shiftCardApi.upsertShiftLog(projectId, payload);
-      setLogs((prev) => (prev.some((l) => l._id === saved._id) ? prev.map((l) => (l._id === saved._id ? saved : l)) : [...prev, saved]));
+      setLogs((prev) => upsertById(prev, saved));
       setNotice(`${editingLog ? 'Updated' : 'Saved'}: ${describe(saved)}`);
       // Date and shift stay; vehicle and driver clear, ready for the next card.
       resetForm();
@@ -343,7 +333,8 @@ function ShiftEntries({ projectId, date, shift }) {
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-600">
-          Saved for this shift ({logs.length}){logs.length > 0 && ` · ${shiftTrips} trips`}
+          Saved for {shiftLabel(shift)} · {entryCount(logs.length)}
+          {logs.length > 0 && ` · ${shiftTrips} trips`}
         </h2>
 
         {logs.length === 0 ? (

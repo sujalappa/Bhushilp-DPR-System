@@ -2,6 +2,7 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const requireSuperAdmin = require('../middleware/requireSuperAdmin');
 const resolveProjectConn = require('../middleware/resolveProjectConn');
+const requireProjectType = require('../middleware/requireProjectType');
 const { listProjects, createProject } = require('../controllers/projectController');
 const vehicleRoutes = require('./vehicleRoutes');
 const driverRoutes = require('./driverRoutes');
@@ -11,6 +12,8 @@ const shiftLogRoutes = require('./shiftLogRoutes');
 const dailyProductionRoutes = require('./dailyProductionRoutes');
 const fuelRoutes = require('./fuelRoutes');
 const exportRoutes = require('./exportRoutes');
+const analysisRoutes = require('./analysisRoutes');
+const underground = require('./undergroundRoutes');
 
 const router = express.Router();
 
@@ -29,5 +32,15 @@ router.use('/:projectId/shift-logs', resolveProjectConn, shiftLogRoutes);
 router.use('/:projectId/production', resolveProjectConn, dailyProductionRoutes);
 router.use('/:projectId/fuel', resolveProjectConn, fuelRoutes);
 router.use('/:projectId/export', resolveProjectConn, exportRoutes);
+router.use('/:projectId/analysis', resolveProjectConn, analysisRoutes);
+
+// Underground projects only.
+const ug = [resolveProjectConn, requireProjectType('underground')];
+router.use('/:projectId/levels', ug, underground.levelRoutes);
+router.use('/:projectId/supervisors', ug, underground.supervisorRoutes);
+router.use('/:projectId/workers', ug, underground.workerRoutes);
+router.use('/:projectId/headings', ug, underground.headingRoutes);
+router.use('/:projectId/ug-production', ug, underground.ugProductionRoutes);
+router.use('/:projectId/ug-development', ug, underground.ugDevelopmentRoutes);
 
 module.exports = router;

@@ -15,6 +15,8 @@ function makeDbName(name) {
   return `dpr_${base}_${suffix}`;
 }
 
+const PROJECT_TYPES = ['mining', 'underground', 'exploration'];
+
 const listProjects = asyncHandler(async (req, res) => {
   const filter = { status: 'active' };
   if (req.query.type) filter.type = req.query.type;
@@ -32,8 +34,8 @@ const createProject = asyncHandler(async (req, res) => {
   if (!name || !type) {
     throw new AppError('name and type are required', 400);
   }
-  if (!['mining', 'exploration'].includes(type)) {
-    throw new AppError('type must be "mining" or "exploration"', 400);
+  if (!PROJECT_TYPES.includes(type)) {
+    throw new AppError(`type must be one of: ${PROJECT_TYPES.join(', ')}`, 400);
   }
 
   const project = await Project.create({
