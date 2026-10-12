@@ -6,13 +6,9 @@ import Spinner from './components/Spinner';
 import Login from './pages/Login';
 import ProjectList from './pages/ProjectList';
 import ProjectFormsPage from './pages/ProjectFormsPage';
-import DateShiftPage from './pages/shiftCard/DateShiftPage';
-import ShiftVehiclesPage from './pages/shiftCard/ShiftVehiclesPage';
-import DriverSegmentsPage from './pages/shiftCard/DriverSegmentsPage';
-import VehicleShiftFormPage from './pages/shiftCard/VehicleShiftFormPage';
+import ShiftCardPage from './pages/shiftCard/ShiftCardPage';
 import ProductionDatePage from './pages/production/ProductionDatePage';
-import FuelDatePage from './pages/fuel/FuelDatePage';
-import FuelVehicleFormPage from './pages/fuel/FuelVehicleFormPage';
+import FuelPage from './pages/fuel/FuelPage';
 import ManageUsers from './pages/admin/ManageUsers';
 import DataExport from './pages/admin/DataExport';
 
@@ -51,31 +47,7 @@ export default function App() {
             path="/projects/:projectId/shift-card"
             element={
               <RequireFormAccess formSlug="shift-card">
-                <DateShiftPage />
-              </RequireFormAccess>
-            }
-          />
-          <Route
-            path="/projects/:projectId/shift-card/:date/:shift"
-            element={
-              <RequireFormAccess formSlug="shift-card">
-                <ShiftVehiclesPage />
-              </RequireFormAccess>
-            }
-          />
-          <Route
-            path="/projects/:projectId/shift-card/:date/:shift/:vehicleId"
-            element={
-              <RequireFormAccess formSlug="shift-card">
-                <DriverSegmentsPage />
-              </RequireFormAccess>
-            }
-          />
-          <Route
-            path="/projects/:projectId/shift-card/:date/:shift/:vehicleId/:driverId"
-            element={
-              <RequireFormAccess formSlug="shift-card">
-                <VehicleShiftFormPage />
+                <ShiftCardPage />
               </RequireFormAccess>
             }
           />
@@ -93,15 +65,7 @@ export default function App() {
             path="/projects/:projectId/fuel"
             element={
               <RequireFormAccess formSlug="fuel">
-                <FuelDatePage />
-              </RequireFormAccess>
-            }
-          />
-          <Route
-            path="/projects/:projectId/fuel/:date/:vehicleId"
-            element={
-              <RequireFormAccess formSlug="fuel">
-                <FuelVehicleFormPage />
+                <FuelPage />
               </RequireFormAccess>
             }
           />

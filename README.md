@@ -14,10 +14,12 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
   only have Shift Card on one project). Enforced on the backend in
   middleware, not just hidden in the UI.
 - **Forms live so far:**
-  - **Shift Card** (Date → Shift → Vehicle → Driver → Trips) — the digitized
-    version of the paper "Tipper/Dumper Driver Shift Card".
+  - **Shift Card** — the digitized version of the paper "Tipper/Dumper
+    Driver Shift Card". One page: pick date, shift, vehicle and driver, fill
+    in the card, save; entries already saved for that shift are listed
+    underneath. One entry per date+shift+vehicle+driver.
   - **Daily Production** — one entry per date+shift.
-  - **Daily Fuel Consumption** — one entry per date+vehicle.
+  - **Daily Fuel Consumption** — one page, one entry per date+vehicle.
 - **Superadmin Data Export** (`/admin/export`) — on-page spreadsheet view
   plus a full multi-sheet Excel download, across all projects, for backup.
 

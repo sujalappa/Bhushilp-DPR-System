@@ -38,7 +38,9 @@ const upsertFuelLog = asyncHandler(async (req, res) => {
   const vehicle = await Vehicle.findById(vehicleId);
   if (!vehicle) throw new AppError('Vehicle not found', 404);
 
-  const num = (v) => (v === '' || v == null ? undefined : Number(v));
+  // Blank becomes null (not undefined, which $set would skip), so clearing a
+  // previously saved reading actually clears it.
+  const num = (v) => (v === '' || v == null ? null : Number(v));
   const setFields = {
     date: new Date(date),
     vehicleId,
@@ -47,7 +49,7 @@ const upsertFuelLog = asyncHandler(async (req, res) => {
     openingFuel: num(openingFuel),
     fuelIssued: num(fuelIssued),
     closingFuel: num(closingFuel),
-    remark,
+    remark: remark || '',
     createdBy: req.user._id,
   };
 
@@ -61,4 +63,12 @@ const upsertFuelLog = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: withComputed(doc) });
 });
 
-module.exports = { listFuelLogs, upsertFuelLog, withComputed };
+const deleteFuelLog = asyncHandler(async (req, res) => {
+  const { FuelLog } = req.projectModels;
+  const log = await FuelLog.findByIdAndDelete(req.params.fuelLogId);
+  if (!log) throw new AppError('Fuel entry not found', 404);
+
+  res.status(200).json({ success: true, data: { _id: req.params.fuelLogId } });
+});
+
+module.exports = { listFuelLogs, upsertFuelLog, deleteFuelLog, withComputed };

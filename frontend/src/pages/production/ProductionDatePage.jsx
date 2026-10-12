@@ -103,7 +103,7 @@ function ProductionForm({ projectId, date, shift }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Hard OB">
           <input
