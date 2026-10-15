@@ -20,6 +20,10 @@ export const fitNames = (names, count) => {
   return Array.from({ length: n }, (_, i) => names[i] ?? '');
 };
 
+// Development's supervisor name boxes: one per supervisor counted, and
+// always at least one, for whoever was in charge when none was counted.
+export const supervisorBoxes = (names, count) => fitNames(names, Math.max(1, Number(count) || 0));
+
 export const emptyCrew = () => Object.fromEntries(CREW_NAME_KEYS.map((k) => [k, []]));
 
 // A saved entry has the workers populated ({ _id, name }); the form holds

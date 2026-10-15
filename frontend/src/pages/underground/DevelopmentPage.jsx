@@ -12,7 +12,7 @@ import DateShiftPicker from '../../components/DateShiftPicker';
 import ManpowerFields from './ManpowerFields';
 import HeadingPicker from './HeadingPicker';
 import { withReferenced } from '../../utils/options';
-import { CREW, CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
+import { CREW, CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew, supervisorBoxes } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
 import useWorkOrder from '../../hooks/useWorkOrder';
 import WaitingBadge from './WaitingBadge';
@@ -47,13 +47,27 @@ export default function DevelopmentPage() {
 
 const COUNT_KEYS = ['supervisors', 'drillers', 'helpers', 'blasters', 'muckers'];
 const NUMERIC_KEYS = [...COUNT_KEYS, 'tons', 'filling', 'progress'];
-const emptyFields = { ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])), ...emptyCrew(), remark: '' };
+const emptyFields = {
+  ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])),
+  ...emptyCrew(),
+  supervisorNames: supervisorBoxes([], 0),
+  remark: '',
+};
 
 const fieldsFromEntry = (entry) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, entry[k] ?? ''])),
   ...crewNamesFromEntry(entry),
+  supervisorNames: supervisorBoxes((entry.supervisorIds || []).map((x) => x.name), entry.supervisors),
   remark: entry.remark || '',
 });
+
+// "Supervisor: A" on a saved entry, or "In-charge: A" when none was counted.
+const supervisorLine = (entry) => {
+  const names = (entry.supervisorIds || []).map((x) => x?.name).filter(Boolean);
+  if (names.length === 0) return '';
+  if (!(entry.supervisors > 0)) return `In-charge: ${names.join(', ')}`;
+  return `${names.length === 1 ? 'Supervisor' : 'Supervisors'}: ${names.join(', ')}`;
+};
 
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const headingLabel = (h) => `${h?.levelId?.name || 'Level'} · ${h?.name || 'Heading'}`;
@@ -67,6 +81,7 @@ function Entries({ projectId, workOrder, date, shift }) {
   const levels = workOrder.levelIds;
   const [headings, setHeadings] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [supervisors, setSupervisors] = useState([]);
   const [data, setData] = useState(null); // { entries, progressToDate }
   const [loadError, setLoadError] = useState('');
 
@@ -93,6 +108,7 @@ function Entries({ projectId, workOrder, date, shift }) {
         if (p.workOrderId !== workOrderId || p.date !== date || p.shift !== shift) return;
         reload().catch(() => {});
         mastersApi.listWorkers(projectId, { active: true }).then(setWorkers).catch(() => {});
+        mastersApi.listSupervisors(projectId, { active: true }).then(setSupervisors).catch(() => {});
       }),
     [reload, projectId, workOrderId, date, shift]
   );
@@ -103,12 +119,14 @@ function Entries({ projectId, workOrder, date, shift }) {
     Promise.all([
       mastersApi.listHeadings(projectId, { active: true }),
       mastersApi.listWorkers(projectId, { active: true }),
+      mastersApi.listSupervisors(projectId, { active: true }),
       undergroundApi.listDevelopment(projectId, workOrderId, date, shift),
     ])
-      .then(([headingList, workerList, development]) => {
+      .then(([headingList, workerList, supervisorList, development]) => {
         if (cancelled) return;
         setHeadings(headingList.filter((h) => onWorkOrder.has(h.levelId?._id)));
         setWorkers(workerList);
+        setSupervisors(supervisorList);
         setData(development);
       })
       .catch((err) => !cancelled && setLoadError(err.message));
@@ -127,6 +145,7 @@ function Entries({ projectId, workOrder, date, shift }) {
   const entries = [...data.entries.filter((e) => !waitingHeadings.has(e.headingId?._id)), ...waiting];
   const headingOptions = withReferenced(headings, entries.map((e) => e.headingId));
   const workerOptions = withReferenced(workers, crewWorkers(entries));
+  const supervisorOptions = withReferenced(supervisors, entries.flatMap((e) => e.supervisorIds || []));
   const pendingHeadings = headings.filter((h) => !entries.some((e) => e.headingId?._id === h._id));
   const metresById = new Map(progressToDate.map((p) => [p.headingId, p.metres]));
 
@@ -171,7 +190,7 @@ function Entries({ projectId, workOrder, date, shift }) {
       // heading was switched to one.
       payload[key] = key === 'filling' && isOreDrive ? '' : fields[key];
     });
-    CREW_NAME_KEYS.forEach((key) => {
+    [...CREW_NAME_KEYS, 'supervisorNames'].forEach((key) => {
       payload[key] = fields[key];
     });
     const key = [workOrderId, date, shift, headingId].join('|');
@@ -186,9 +205,13 @@ function Entries({ projectId, workOrder, date, shift }) {
       // mustn't be sent over it later.
       if (waitingCopy) removeItem(waitingCopy.id);
       // Refetched rather than patched locally, because a save also moves
-      // the heading's progress to date; the worker list too, since a newly
-      // typed name was added to it.
-      await Promise.all([reload(), mastersApi.listWorkers(projectId, { active: true }).then(setWorkers)]);
+      // the heading's progress to date; the worker and supervisor lists
+      // too, since a newly typed name was added to them.
+      await Promise.all([
+        reload(),
+        mastersApi.listWorkers(projectId, { active: true }).then(setWorkers),
+        mastersApi.listSupervisors(projectId, { active: true }).then(setSupervisors),
+      ]);
       setNotice({ text: `${editingEntry ? 'Updated' : 'Saved'}: ${headingLabel(saved.headingId)}` });
       resetForm();
       scrollToForm();
@@ -211,6 +234,10 @@ function Entries({ projectId, workOrder, date, shift }) {
       const names = fields[c.namesKey].map((n) => n.trim()).filter(Boolean);
       entry[c.idsKey] = names.map((name) => ({ _id: `name:${name.toLowerCase()}`, name }));
     });
+    entry.supervisorIds = fields.supervisorNames
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .map((name) => ({ _id: `name:${name.toLowerCase()}`, name }));
     enqueue({ kind: 'ug-development', projectId, key, payload, display: { title: headingLabel(heading), entry } });
     setNotice({ text: `Saved on this phone: ${headingLabel(heading)}. It will be sent when there's signal.`, onPhone: true });
     resetForm();
@@ -278,6 +305,7 @@ function Entries({ projectId, workOrder, date, shift }) {
               fields={fields}
               setField={setField}
               workers={workerOptions}
+              supervisors={supervisorOptions}
             />
 
             <div className="grid grid-cols-2 gap-3">
@@ -365,6 +393,7 @@ function Entries({ projectId, workOrder, date, shift }) {
                         .filter(Boolean)
                         .join(' · ')}
                     </div>
+                    {supervisorLine(entry) && <div className="mt-1 text-sm text-slate-500">{supervisorLine(entry)}</div>}
                     {crewSummary(entry) && <div className="mt-1 text-sm text-slate-500">{crewSummary(entry)}</div>}
                     {entry.remark && <div className="mt-1 text-sm text-slate-500">“{entry.remark}”</div>}
                     {entry.outbox && <WaitingBadge item={entry.outbox} />}

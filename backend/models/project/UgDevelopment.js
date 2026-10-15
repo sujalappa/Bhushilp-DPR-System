@@ -19,6 +19,9 @@ const ugDevelopmentSchema = new mongoose.Schema(
     // Who the drillers, helpers, blasters and muckers were — optional, and
     // never more names than that trade's head count.
     ...crewSchemaFields(),
+    // Who supervised: one name per supervisor counted, or the person in
+    // charge when the count is 0 — so at most max(1, supervisors) names.
+    supervisorIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Supervisor' }], default: [] },
     tons: { type: Number, min: 0 },
     filling: { type: Number, min: 0 },
     progress: { type: Number, min: 0 },

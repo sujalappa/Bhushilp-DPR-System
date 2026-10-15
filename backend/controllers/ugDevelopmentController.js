@@ -6,7 +6,36 @@ const { findWorkOrder, assertLevelOnWorkOrder } = require('./ugProductionControl
 
 const NUMERIC_KEYS = ['supervisors', 'drillers', 'helpers', 'blasters', 'muckers', 'tons', 'filling', 'progress'];
 
-const populateHeading = [{ path: 'headingId', populate: { path: 'levelId', select: 'name' } }, ...crewPopulate];
+const populateHeading = [
+  { path: 'headingId', populate: { path: 'levelId', select: 'name' } },
+  { path: 'supervisorIds', select: 'name' },
+  ...crewPopulate,
+];
+
+const tidy = (name) => String(name ?? '').trim().replace(/\s+/g, ' ');
+
+// The typed supervisor names as Supervisor ids, from the same list Level
+// Production picks from: a name matching one there (ignoring case) is that
+// supervisor, a new one is added. Even with a count of 0 one name is
+// allowed — whoever was in charge of the heading that shift.
+async function resolveSupervisorNames(Supervisor, body) {
+  const names = Array.isArray(body.supervisorNames) ? body.supervisorNames.map(tidy).filter(Boolean) : [];
+  const unique = [...new Map(names.map((n) => [n.toLowerCase(), n])).values()];
+  const allowed = Math.max(1, Number(body.supervisors) || 0);
+  if (unique.length > allowed) {
+    throw new AppError(`${unique.length} supervisor names entered but the supervisor count is ${Number(body.supervisors) || 0}`, 400);
+  }
+  if (unique.length === 0) return [];
+
+  const existing = await Supervisor.find({}, { name: 1 });
+  const byName = new Map(existing.map((s) => [s.name.toLowerCase(), s._id]));
+  const ids = [];
+  for (const name of unique) {
+    if (!byName.has(name.toLowerCase())) byName.set(name.toLowerCase(), (await Supervisor.create({ name }))._id);
+    ids.push(byName.get(name.toLowerCase()));
+  }
+  return ids;
+}
 
 const listUgDevelopment = asyncHandler(async (req, res) => {
   const { UgDevelopment, Heading } = req.projectModels;
@@ -40,7 +69,7 @@ const listUgDevelopment = asyncHandler(async (req, res) => {
 
 // Upsert on (date, shift, work order, heading).
 const upsertUgDevelopment = asyncHandler(async (req, res) => {
-  const { UgDevelopment, Heading } = req.projectModels;
+  const { UgDevelopment, Heading, Supervisor } = req.projectModels;
   const { date, shift, workOrderId, headingId, remark } = req.body;
   if (!date || !shift || !headingId) throw new AppError('date, shift and headingId are required', 400);
   const workOrder = await findWorkOrder(req.projectModels, workOrderId);
@@ -57,6 +86,7 @@ const upsertUgDevelopment = asyncHandler(async (req, res) => {
     remark: remark || '',
     createdBy: req.user._id,
     ...(await resolveCrew(req.projectModels, req.body)),
+    supervisorIds: await resolveSupervisorNames(Supervisor, req.body),
   };
   NUMERIC_KEYS.forEach((key) => {
     setFields[key] = toNumberOrNull(req.body[key]);

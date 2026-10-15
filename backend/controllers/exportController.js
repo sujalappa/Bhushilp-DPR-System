@@ -201,6 +201,7 @@ async function fetchUgDevelopmentRows(models, query) {
   const entries = await models.UgDevelopment.find(buildDateFilter(query))
     .populate('workOrderId', 'number')
     .populate({ path: 'headingId', populate: { path: 'levelId', select: 'name' } })
+    .populate({ path: 'supervisorIds', select: 'name' })
     .populate(crewPopulate)
     .sort({ date: 1, shift: 1, createdAt: 1 });
 
@@ -208,7 +209,7 @@ async function fetchUgDevelopmentRows(models, query) {
     'Date', 'Shift', 'Work Order', 'Level', 'Heading',
     'Supervisor', 'Driller', 'Helper', 'Blaster', 'Mucker',
     'Tons', 'Filling', 'Progress (m)',
-    'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
+    'Supervisor Names', 'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
   ];
   const rows = entries.map((e) => ({
     Date: toDateOnly(e.date),
@@ -224,6 +225,7 @@ async function fetchUgDevelopmentRows(models, query) {
     Tons: e.tons ?? '',
     Filling: e.filling ?? '',
     'Progress (m)': e.progress ?? '',
+    'Supervisor Names': (e.supervisorIds || []).map((s) => s?.name).filter(Boolean).join(', '),
     ...crewNameColumns(e),
     Remark: e.remark || '',
   }));
