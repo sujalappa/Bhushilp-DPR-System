@@ -20,6 +20,8 @@ export default function WorkOrderForm({ projectId, title, initial, onSubmit, onS
   const [levelIds, setLevelIds] = useState(() => (initial.levelIds || []).map((l) => l._id || l));
   const [forms, setForms] = useState(() => initial.forms || WORK_ORDER_FORMS.map((f) => f.slug));
   const [levels, setLevels] = useState(null);
+  // The new-level box only shows after "+ Add level" is tapped.
+  const [levelBoxOpen, setLevelBoxOpen] = useState(false);
   const [newLevel, setNewLevel] = useState('');
   const [addingLevel, setAddingLevel] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -41,6 +43,11 @@ export default function WorkOrderForm({ projectId, title, initial, onSubmit, onS
     setForms((list) => (list.includes(slug) ? list.filter((x) => x !== slug) : [...list, slug]));
   const toggleLevel = (id) => setLevelIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
+  const closeLevelBox = () => {
+    setLevelBoxOpen(false);
+    setNewLevel('');
+  };
+
   // A level typed here is created for the project and ticked for this work
   // order straight away.
   const handleAddLevel = async () => {
@@ -50,7 +57,7 @@ export default function WorkOrderForm({ projectId, title, initial, onSubmit, onS
       const level = await mastersApi.createLevel(projectId, { name: newLevel.trim() });
       setLevels((list) => [...list, level]);
       setLevelIds((ids) => [...ids, level._id]);
-      setNewLevel('');
+      closeLevelBox();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,21 +125,35 @@ export default function WorkOrderForm({ projectId, title, initial, onSubmit, onS
                 {l.name}
               </label>
             ))}
-            {levels.length === 0 && <span className="text-sm text-slate-500">No levels yet — add one below.</span>}
+            {!levelBoxOpen && (
+              <button
+                type="button"
+                onClick={() => setLevelBoxOpen(true)}
+                className="rounded-full border border-dashed border-brand-300 px-3 py-0.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
+              >
+                + Add level
+              </button>
+            )}
           </div>
         )}
-        <div className="mt-2 flex gap-2">
-          <input
-            aria-label="New level name"
-            placeholder="Add a level, e.g. -370'L"
-            className={inputClass()}
-            value={newLevel}
-            onChange={(e) => setNewLevel(e.target.value)}
-          />
-          <Button type="button" variant="secondary" onClick={handleAddLevel} disabled={addingLevel || !newLevel.trim()}>
-            {addingLevel ? 'Adding…' : 'Add'}
-          </Button>
-        </div>
+        {levelBoxOpen && (
+          <div className="mt-2 flex gap-2">
+            <input
+              autoFocus
+              aria-label="New level name"
+              placeholder="e.g. -370'L"
+              className={inputClass()}
+              value={newLevel}
+              onChange={(e) => setNewLevel(e.target.value)}
+            />
+            <Button type="button" variant="secondary" onClick={handleAddLevel} disabled={addingLevel || !newLevel.trim()}>
+              {addingLevel ? 'Adding…' : 'Add'}
+            </Button>
+            <Button type="button" variant="secondary" onClick={closeLevelBox}>
+              Cancel
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
