@@ -88,10 +88,15 @@ function assertLevelOnWorkOrder(workOrder, level) {
   }
 }
 
-async function findWorkOrder(models, workOrderId) {
+// The entry's work order, which must have `form` among its forms.
+async function findWorkOrder(models, workOrderId, form) {
   if (!workOrderId) throw new AppError('workOrderId is required', 400);
   const workOrder = await models.WorkOrder.findById(workOrderId).catch(() => null);
   if (!workOrder) throw new AppError('Work order not found', 404);
+  if (form && !workOrder.forms.includes(form)) {
+    const label = form === 'ug-production' ? 'Level Production' : 'Development';
+    throw new AppError(`Work order ${workOrder.number} doesn't have ${label}`, 400);
+  }
   return workOrder;
 }
 
@@ -99,7 +104,7 @@ const listUgProduction = asyncHandler(async (req, res) => {
   const { UgProduction } = req.projectModels;
   const { date, shift, workOrderId } = req.query;
   if (!date || !shift) throw new AppError('date and shift are required', 400);
-  const workOrder = await findWorkOrder(req.projectModels, workOrderId);
+  const workOrder = await findWorkOrder(req.projectModels, workOrderId, 'ug-production');
 
   const day = new Date(date);
   const monthStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1));
@@ -165,7 +170,7 @@ const upsertUgProduction = asyncHandler(async (req, res) => {
     throw new AppError('date, shift, levelId and supervisorId (or supervisorName) are required', 400);
   }
   if (tubs === '' || tubs == null) throw new AppError('Tubs is required', 400);
-  const workOrder = await findWorkOrder(req.projectModels, workOrderId);
+  const workOrder = await findWorkOrder(req.projectModels, workOrderId, 'ug-production');
 
   const level = await Level.findById(levelId);
   if (!level) throw new AppError('Level not found', 404);

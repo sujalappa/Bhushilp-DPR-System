@@ -5,13 +5,16 @@ import Button from '../../components/Button';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
-import { WORK_ORDER_DEFAULTS, levelNames } from '../../utils/workOrder';
+import { WORK_ORDER_DEFAULTS, formNames, levelNames, workOrderForms } from '../../utils/workOrder';
+import { useAuth } from '../../context/AuthContext';
 
 // An underground project's page lists its work orders; each one opens the
 // forms for entries under that contract. Only a superadmin can add one,
-// since it carries billing rates.
+// since it carries billing rates. Everyone else sees only the work orders
+// that have a form they're assigned.
 export default function WorkOrderList({ projectId, canManage }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [workOrders, setWorkOrders] = useState(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
@@ -30,18 +33,21 @@ export default function WorkOrderList({ projectId, canManage }) {
   if (error) return <ErrorBanner message={error} />;
   if (workOrders === null) return <Spinner full />;
 
+  const myForms = user.isSuperAdmin ? null : user.assignments.find((a) => a.projectId === projectId)?.forms || [];
+  const shown = myForms ? workOrders.filter((w) => workOrderForms(w).some((f) => myForms.includes(f))) : workOrders;
+
   return (
     <div className="space-y-4">
       <h2 className="text-sm font-medium text-slate-600">Work orders</h2>
 
-      {workOrders.length === 0 && (
+      {shown.length === 0 && (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
           {canManage ? 'No work orders yet. Add the first one below.' : 'No work orders yet. Ask the admin to add one.'}
         </p>
       )}
 
       <div className="space-y-2">
-        {workOrders.map((w) => (
+        {shown.map((w) => (
           <button
             key={w._id}
             type="button"
@@ -49,6 +55,7 @@ export default function WorkOrderList({ projectId, canManage }) {
             className="block w-full rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-brand-300"
           >
             <div className="font-medium text-slate-900">Work order {w.number}</div>
+            <div className="text-sm text-slate-500">{formNames(w)}</div>
             <div className="text-sm text-slate-500">
               {w.levelIds?.length > 0 ? `Levels: ${levelNames(w)}` : 'No levels yet'}
             </div>

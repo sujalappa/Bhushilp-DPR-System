@@ -41,7 +41,7 @@ const listUgDevelopment = asyncHandler(async (req, res) => {
   const { UgDevelopment, Heading } = req.projectModels;
   const { date, shift, workOrderId } = req.query;
   if (!date || !shift) throw new AppError('date and shift are required', 400);
-  await findWorkOrder(req.projectModels, workOrderId);
+  await findWorkOrder(req.projectModels, workOrderId, 'ug-development');
 
   const day = new Date(date);
   const [entries, driven, headings] = await Promise.all([
@@ -72,7 +72,7 @@ const upsertUgDevelopment = asyncHandler(async (req, res) => {
   const { UgDevelopment, Heading, Supervisor } = req.projectModels;
   const { date, shift, workOrderId, headingId, remark } = req.body;
   if (!date || !shift || !headingId) throw new AppError('date, shift and headingId are required', 400);
-  const workOrder = await findWorkOrder(req.projectModels, workOrderId);
+  const workOrder = await findWorkOrder(req.projectModels, workOrderId, 'ug-development');
 
   const heading = await Heading.findById(headingId).populate('levelId', 'name');
   if (!heading) throw new AppError('Heading not found', 404);

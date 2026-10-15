@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { WORK_ORDER_FORMS } = require('../models/project/WorkOrder');
 
 const RATE_KEYS = ['ratePerCubicMetre', 'drillerWage', 'helperWage', 'wageMarkupPct'];
+const FORM_LABELS = { 'ug-production': 'Level Production', 'ug-development': 'Development' };
+const ENTRY_MODELS = { 'ug-production': 'UgProduction', 'ug-development': 'UgDevelopment' };
 
 // Copies the editable fields present in the request onto the work order.
 async function apply(models, workOrder, body) {
@@ -24,6 +27,21 @@ async function apply(models, workOrder, body) {
     const found = await models.Level.countDocuments({ _id: { $in: ids } });
     if (found !== ids.length) throw new AppError('One or more levels were not found', 400);
     workOrder.levelIds = ids;
+  }
+  if (body.forms !== undefined) {
+    const forms = [...new Set(Array.isArray(body.forms) ? body.forms : [])];
+    if (forms.length === 0) throw new AppError('Pick at least one form for the work order', 400);
+    if (forms.some((f) => !WORK_ORDER_FORMS.includes(f))) throw new AppError('Unknown form', 400);
+    // Taking a form off would hide what's already been entered under it.
+    for (const form of workOrder.forms.filter((f) => !forms.includes(f))) {
+      if (workOrder._id && (await models[ENTRY_MODELS[form]].exists({ workOrderId: workOrder._id }))) {
+        throw new AppError(
+          `Work order ${workOrder.number} already has ${FORM_LABELS[form]} entries, so that form can't be removed`,
+          400
+        );
+      }
+    }
+    workOrder.forms = WORK_ORDER_FORMS.filter((f) => forms.includes(f));
   }
 }
 

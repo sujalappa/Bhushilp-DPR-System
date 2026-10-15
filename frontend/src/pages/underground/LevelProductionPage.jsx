@@ -17,6 +17,7 @@ import { withReferenced } from '../../utils/options';
 import { CREW, CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
 import useWorkOrder from '../../hooks/useWorkOrder';
+import { workOrderForms } from '../../utils/workOrder';
 import LabourAndBilling from './LabourAndBilling';
 import WaitingBadge from './WaitingBadge';
 import { enqueue, itemsFor, removeItem, useOutbox } from '../../offline/outbox';
@@ -36,7 +37,12 @@ export default function LevelProductionPage() {
     <AppShell title="Level Production" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
       <ErrorBanner message={error} />
       {!workOrder && !error && <Spinner full />}
-      {workOrder && (
+      {workOrder && !workOrderForms(workOrder).includes('ug-production') && (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Work order {workOrder.number} doesn&apos;t have Level Production.
+        </p>
+      )}
+      {workOrder && workOrderForms(workOrder).includes('ug-production') && (
         <>
           <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>
           <DateShiftPicker projectId={projectId}>

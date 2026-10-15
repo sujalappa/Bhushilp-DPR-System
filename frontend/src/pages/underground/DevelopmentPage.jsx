@@ -15,6 +15,7 @@ import { withReferenced } from '../../utils/options';
 import { CREW, CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew, supervisorBoxes } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
 import useWorkOrder from '../../hooks/useWorkOrder';
+import { workOrderForms } from '../../utils/workOrder';
 import WaitingBadge from './WaitingBadge';
 import { enqueue, itemsFor, removeItem, useOutbox } from '../../offline/outbox';
 import { onSynced } from '../../offline/sync';
@@ -31,7 +32,12 @@ export default function DevelopmentPage() {
     <AppShell title="Development" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
       <ErrorBanner message={error} />
       {!workOrder && !error && <Spinner full />}
-      {workOrder && (
+      {workOrder && !workOrderForms(workOrder).includes('ug-development') && (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Work order {workOrder.number} doesn&apos;t have Development.
+        </p>
+      )}
+      {workOrder && workOrderForms(workOrder).includes('ug-development') && (
         <>
           <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>
           <DateShiftPicker projectId={projectId}>

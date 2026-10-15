@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const WORK_ORDER_FORMS = ['ug-production', 'ug-development'];
+
 // A contract under which an underground mine is worked, e.g. 9100005472.
 // Every Level Production and Development entry belongs to one. It carries
 // the rates its labour and billing figures are worked out with, because
@@ -13,6 +15,13 @@ const workOrderSchema = new mongoose.Schema(
     // offer these levels. A level can belong to more than one work order
     // (e.g. -370'L under both 9100005341 and 9100005472).
     levelIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Level' }], default: [] },
+    // Which forms are filled in under this contract — some cover only
+    // production or only development. Older work orders, saved before this
+    // existed, read as having both.
+    forms: {
+      type: [{ type: String, enum: WORK_ORDER_FORMS }],
+      default: () => [...WORK_ORDER_FORMS],
+    },
     ratePerCubicMetre: { type: Number, default: 990.67, min: 0 },
     drillerWage: { type: Number, default: 827, min: 0 },
     helperWage: { type: Number, default: 693, min: 0 },
@@ -25,3 +34,4 @@ const workOrderSchema = new mongoose.Schema(
 workOrderSchema.index({ number: 1 }, { unique: true });
 
 module.exports = workOrderSchema;
+module.exports.WORK_ORDER_FORMS = WORK_ORDER_FORMS;

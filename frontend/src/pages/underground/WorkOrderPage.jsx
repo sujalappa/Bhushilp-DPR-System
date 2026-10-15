@@ -8,7 +8,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
 import { formsForProjectType } from '../../utils/forms';
-import { formatRupees, levelNames } from '../../utils/workOrder';
+import { formatRupees, levelNames, workOrderForms } from '../../utils/workOrder';
 
 // One work order: the forms for entries under it and, for the superadmin,
 // the rates its labour and billing figures use.
@@ -25,7 +25,10 @@ export default function WorkOrderPage() {
 
   const hasFormAccess = (slug) =>
     user.isSuperAdmin || user.assignments.some((a) => a.projectId === projectId && a.forms.includes(slug));
-  const forms = formsForProjectType('underground').filter((f) => f.implemented && hasFormAccess(f.slug));
+  // The forms this work order has, of those this person may fill in.
+  const forms = formsForProjectType('underground').filter(
+    (f) => f.implemented && workOrder && workOrderForms(workOrder).includes(f.slug) && hasFormAccess(f.slug)
+  );
 
   return (
     <AppShell title={workOrder ? `Work order ${workOrder.number}` : 'Work order'} backTo={`/projects/${projectId}`}>
@@ -42,6 +45,11 @@ export default function WorkOrderPage() {
           </div>
 
           <div className="space-y-2">
+            {forms.length === 0 && (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+                None of this work order&apos;s forms are assigned to you.
+              </p>
+            )}
             {forms.map((f) => (
               <button
                 key={f.slug}
