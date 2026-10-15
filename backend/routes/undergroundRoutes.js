@@ -21,14 +21,15 @@ function masterRouter({ list, create, update }) {
   return router;
 }
 
-// Work orders are a contract and carry billing rates, so unlike the other
-// masters only a superadmin can add or change one; anyone on the project
-// can see the list to open their forms.
-function workOrderRouter() {
+// Work orders and levels are part of the contract (a work order lists the
+// levels it covers and carries billing rates), so unlike the other masters
+// only a superadmin can add or change them; anyone on the project can read
+// them to fill in their forms.
+function superAdminManagedRouter({ list, create, update }) {
   const router = express.Router({ mergeParams: true });
-  router.get('/', requireProjectAccess, listWorkOrders);
-  router.post('/', requireSuperAdmin, createWorkOrder);
-  router.patch('/:id', requireSuperAdmin, updateWorkOrder);
+  router.get('/', requireProjectAccess, list);
+  router.post('/', requireSuperAdmin, create);
+  router.patch('/:id', requireSuperAdmin, update);
   return router;
 }
 
@@ -43,8 +44,8 @@ function entryRouter(formSlug, { list, upsert, remove }) {
 }
 
 module.exports = {
-  workOrderRoutes: workOrderRouter(),
-  levelRoutes: masterRouter(levelController),
+  workOrderRoutes: superAdminManagedRouter({ list: listWorkOrders, create: createWorkOrder, update: updateWorkOrder }),
+  levelRoutes: superAdminManagedRouter(levelController),
   supervisorRoutes: masterRouter(supervisorController),
   workerRoutes: masterRouter(workerController),
   headingRoutes: masterRouter({ list: listHeadings, create: createHeading, update: updateHeading }),

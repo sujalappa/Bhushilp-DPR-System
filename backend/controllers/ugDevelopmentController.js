@@ -2,7 +2,7 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { toNumberOrNull, round } = require('../utils/numbers');
 const { resolveCrew, crewPopulate } = require('../utils/crew');
-const { findWorkOrder } = require('./ugProductionController');
+const { findWorkOrder, assertLevelOnWorkOrder } = require('./ugProductionController');
 
 const NUMERIC_KEYS = ['supervisors', 'drillers', 'helpers', 'blasters', 'muckers', 'tons', 'filling', 'progress'];
 
@@ -43,10 +43,11 @@ const upsertUgDevelopment = asyncHandler(async (req, res) => {
   const { UgDevelopment, Heading } = req.projectModels;
   const { date, shift, workOrderId, headingId, remark } = req.body;
   if (!date || !shift || !headingId) throw new AppError('date, shift and headingId are required', 400);
-  await findWorkOrder(req.projectModels, workOrderId);
+  const workOrder = await findWorkOrder(req.projectModels, workOrderId);
 
-  const heading = await Heading.findById(headingId);
+  const heading = await Heading.findById(headingId).populate('levelId', 'name');
   if (!heading) throw new AppError('Heading not found', 404);
+  assertLevelOnWorkOrder(workOrder, heading.levelId);
 
   const setFields = {
     date: new Date(date),

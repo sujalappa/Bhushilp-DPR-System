@@ -79,6 +79,13 @@ function labourAndBilling(entries, workOrder) {
   };
 }
 
+// Entries can only be made on the levels a work order covers.
+function assertLevelOnWorkOrder(workOrder, level) {
+  if (!workOrder.levelIds.some((id) => id.toString() === level._id.toString())) {
+    throw new AppError(`Level ${level.name} isn't on work order ${workOrder.number}`, 400);
+  }
+}
+
 async function findWorkOrder(models, workOrderId) {
   if (!workOrderId) throw new AppError('workOrderId is required', 400);
   const workOrder = await models.WorkOrder.findById(workOrderId).catch(() => null);
@@ -143,11 +150,12 @@ const upsertUgProduction = asyncHandler(async (req, res) => {
     throw new AppError('date, shift, levelId and supervisorId are required', 400);
   }
   if (tubs === '' || tubs == null) throw new AppError('Tubs is required', 400);
-  await findWorkOrder(req.projectModels, workOrderId);
+  const workOrder = await findWorkOrder(req.projectModels, workOrderId);
 
   const [level, supervisor] = await Promise.all([Level.findById(levelId), Supervisor.findById(supervisorId)]);
   if (!level) throw new AppError('Level not found', 404);
   if (!supervisor) throw new AppError('Supervisor not found', 404);
+  assertLevelOnWorkOrder(workOrder, level);
 
   const setFields = {
     date: new Date(date),
@@ -184,4 +192,12 @@ const deleteUgProduction = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: { _id: req.params.entryId } });
 });
 
-module.exports = { listUgProduction, upsertUgProduction, deleteUgProduction, withComputed, findWorkOrder, LEVEL_FIELDS };
+module.exports = {
+  listUgProduction,
+  upsertUgProduction,
+  deleteUgProduction,
+  withComputed,
+  findWorkOrder,
+  assertLevelOnWorkOrder,
+  LEVEL_FIELDS,
+};

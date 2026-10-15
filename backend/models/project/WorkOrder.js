@@ -9,6 +9,10 @@ const workOrderSchema = new mongoose.Schema(
   {
     number: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
+    // The levels this contract covers. Inside a work order the forms only
+    // offer these levels. A level can belong to more than one work order
+    // (e.g. -370'L under both 9100005341 and 9100005472).
+    levelIds: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Level' }], default: [] },
     ratePerCubicMetre: { type: Number, default: 990.67, min: 0 },
     drillerWage: { type: Number, default: 827, min: 0 },
     helperWage: { type: Number, default: 693, min: 0 },

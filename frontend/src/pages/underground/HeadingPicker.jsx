@@ -16,7 +16,9 @@ const KINDS = [
 // Dropdown of headings with an inline "add new" form. Like PickOrAdd, but a
 // heading needs more than a name: which level it's on, what kind of work it
 // is, and how many metres were already driven before entries began here.
-export default function HeadingPicker({ projectId, headings, levels, value, onChange, onHeadingCreated, onLevelCreated, labelOf }) {
+// `levels` are the work order's levels; new levels are added on the work
+// order itself, not here.
+export default function HeadingPicker({ projectId, headings, levels, value, onChange, onHeadingCreated, labelOf }) {
   const [adding, setAdding] = useState(false);
   const [levelId, setLevelId] = useState('');
   const [name, setName] = useState('');
@@ -79,11 +81,7 @@ export default function HeadingPicker({ projectId, headings, levels, value, onCh
         options={levels}
         value={levelId}
         onChange={setLevelId}
-        onCreate={async (levelName) => {
-          const level = await mastersApi.createLevel(projectId, { name: levelName });
-          onLevelCreated(level);
-          return level;
-        }}
+        allowAdd={false}
       />
 
       <Field label="Heading name" hint='e.g. "Ore Drive", "Cross Cut", "Bottom Jigger"'>

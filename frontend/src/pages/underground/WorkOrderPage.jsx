@@ -8,7 +8,7 @@ import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
 import { formsForProjectType } from '../../utils/forms';
-import { formatRupees } from '../../utils/workOrder';
+import { formatRupees, levelNames } from '../../utils/workOrder';
 
 // One work order: the forms for entries under it and, for the superadmin,
 // the rates its labour and billing figures use.
@@ -34,7 +34,12 @@ export default function WorkOrderPage() {
 
       {workOrder && (
         <div className="space-y-6">
-          {workOrder.description && <p className="text-sm text-slate-500">{workOrder.description}</p>}
+          <div className="text-sm text-slate-600">
+            <div>
+              {workOrder.levelIds.length > 0 ? `Levels: ${levelNames(workOrder)}` : 'No levels on this work order yet.'}
+            </div>
+            {workOrder.description && <div className="text-slate-500">{workOrder.description}</div>}
+          </div>
 
           <div className="space-y-2">
             {forms.map((f) => (
@@ -52,6 +57,7 @@ export default function WorkOrderPage() {
           {user.isSuperAdmin &&
             (editing ? (
               <WorkOrderForm
+                projectId={projectId}
                 title="Edit work order"
                 initial={workOrder}
                 onSubmit={(values) => undergroundApi.updateWorkOrder(projectId, workOrderId, values)}

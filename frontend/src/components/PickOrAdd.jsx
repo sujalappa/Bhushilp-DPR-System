@@ -9,7 +9,9 @@ const ADD_NEW = '__add_new__';
 // first time they see it, without ever needing a pre-seeded master list —
 // and because everyone picks from the same list afterwards, it doesn't
 // reintroduce the old Excel's free-text typo problem.
-export default function PickOrAdd({ label, options, value, onChange, onCreate, placeholder = 'Select…' }) {
+// `allowAdd={false}` drops the "+ Add new" option, for lists someone else
+// manages (e.g. a work order's levels).
+export default function PickOrAdd({ label, options, value, onChange, onCreate, placeholder = 'Select…', allowAdd = true }) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -81,7 +83,7 @@ export default function PickOrAdd({ label, options, value, onChange, onCreate, p
             {o.name}
           </option>
         ))}
-        <option value={ADD_NEW}>+ Add new…</option>
+        {allowAdd && <option value={ADD_NEW}>+ Add new…</option>}
       </select>
     </label>
   );

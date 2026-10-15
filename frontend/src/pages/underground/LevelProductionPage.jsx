@@ -31,13 +31,18 @@ export default function LevelProductionPage() {
 
   return (
     <AppShell title="Level Production" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
-      {workOrder && <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>}
       <ErrorBanner message={error} />
-      <DateShiftPicker projectId={projectId}>
-        {(date, shift) => (
-          <Entries key={`${date}|${shift}`} projectId={projectId} workOrderId={workOrderId} date={date} shift={shift} />
-        )}
-      </DateShiftPicker>
+      {!workOrder && !error && <Spinner full />}
+      {workOrder && (
+        <>
+          <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>
+          <DateShiftPicker projectId={projectId}>
+            {(date, shift) => (
+              <Entries key={`${date}|${shift}`} projectId={projectId} workOrder={workOrder} date={date} shift={shift} />
+            )}
+          </DateShiftPicker>
+        </>
+      )}
     </AppShell>
   );
 }
@@ -56,7 +61,8 @@ const fieldsFromEntry = (entry) => ({
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const describe = (entry) => `${entry.levelId?.name || 'Level'} · ${entry.supervisorId?.name || 'Supervisor'}`;
 
-function Entries({ projectId, workOrderId, date, shift }) {
+function Entries({ projectId, workOrder, date, shift }) {
+  const workOrderId = workOrder._id;
   const { user } = useAuth();
   const [levels, setLevels] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
@@ -101,10 +107,16 @@ function Entries({ projectId, workOrderId, date, shift }) {
   if (data === null) return <Spinner full />;
 
   const { entries, monthToDate, labour } = data;
-  const levelOptions = withReferenced(levels, entries.map((e) => e.levelId));
+  // Only the levels this work order covers (the master list carries the
+  // current conversion factors, so it's filtered rather than replaced).
+  const workOrderLevelIds = new Set(workOrder.levelIds.map((l) => l._id));
+  const levelOptions = withReferenced(
+    levels.filter((l) => workOrderLevelIds.has(l._id)),
+    entries.map((e) => e.levelId)
+  );
   const supervisorOptions = withReferenced(supervisors, entries.map((e) => e.supervisorId));
   const workerOptions = withReferenced(workers, crewWorkers(entries));
-  const pendingLevels = levels.filter((l) => !entries.some((e) => e.levelId?._id === l._id));
+  const pendingLevels = levelOptions.filter((l) => !entries.some((e) => e.levelId?._id === l._id));
 
   const findEntry = (s) =>
     (s.levelId &&
@@ -214,12 +226,14 @@ function Entries({ projectId, workOrderId, date, shift }) {
           options={levelOptions}
           value={selection.levelId}
           onChange={(levelId) => select({ levelId })}
-          onCreate={async (name) => {
-            const level = await mastersApi.createLevel(projectId, { name });
-            setLevels((l) => [...l, level]);
-            return level;
-          }}
+          allowAdd={false}
         />
+        {levelOptions.length === 0 && (
+          <p className="text-sm text-amber-700">
+            No levels on this work order yet.{' '}
+            {user.isSuperAdmin ? 'Add them on the work order page.' : 'Ask the admin to add them.'}
+          </p>
+        )}
 
         {level && (
           <LevelFactors

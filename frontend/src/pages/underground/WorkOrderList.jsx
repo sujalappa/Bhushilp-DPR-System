@@ -5,7 +5,7 @@ import Button from '../../components/Button';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
-import { WORK_ORDER_DEFAULTS } from '../../utils/workOrder';
+import { WORK_ORDER_DEFAULTS, levelNames } from '../../utils/workOrder';
 
 // An underground project's page lists its work orders; each one opens the
 // forms for entries under that contract. Only a superadmin can add one,
@@ -49,6 +49,9 @@ export default function WorkOrderList({ projectId, canManage }) {
             className="block w-full rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-brand-300"
           >
             <div className="font-medium text-slate-900">Work order {w.number}</div>
+            <div className="text-sm text-slate-500">
+              {w.levelIds?.length > 0 ? `Levels: ${levelNames(w)}` : 'No levels yet'}
+            </div>
             {w.description && <div className="text-sm text-slate-500">{w.description}</div>}
           </button>
         ))}
@@ -57,6 +60,7 @@ export default function WorkOrderList({ projectId, canManage }) {
       {canManage &&
         (adding ? (
           <WorkOrderForm
+            projectId={projectId}
             title="New work order"
             initial={WORK_ORDER_DEFAULTS}
             onSubmit={(values) => undergroundApi.createWorkOrder(projectId, values)}

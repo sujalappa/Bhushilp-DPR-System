@@ -26,13 +26,18 @@ export default function DevelopmentPage() {
 
   return (
     <AppShell title="Development" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
-      {workOrder && <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>}
       <ErrorBanner message={error} />
-      <DateShiftPicker projectId={projectId}>
-        {(date, shift) => (
-          <Entries key={`${date}|${shift}`} projectId={projectId} workOrderId={workOrderId} date={date} shift={shift} />
-        )}
-      </DateShiftPicker>
+      {!workOrder && !error && <Spinner full />}
+      {workOrder && (
+        <>
+          <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>
+          <DateShiftPicker projectId={projectId}>
+            {(date, shift) => (
+              <Entries key={`${date}|${shift}`} projectId={projectId} workOrder={workOrder} date={date} shift={shift} />
+            )}
+          </DateShiftPicker>
+        </>
+      )}
     </AppShell>
   );
 }
@@ -50,8 +55,10 @@ const fieldsFromEntry = (entry) => ({
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const headingLabel = (h) => `${h?.levelId?.name || 'Level'} · ${h?.name || 'Heading'}`;
 
-function Entries({ projectId, workOrderId, date, shift }) {
-  const [levels, setLevels] = useState([]);
+function Entries({ projectId, workOrder, date, shift }) {
+  const workOrderId = workOrder._id;
+  // Only this work order's levels, and the headings on them.
+  const levels = workOrder.levelIds;
   const [headings, setHeadings] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [data, setData] = useState(null); // { entries, progressToDate }
@@ -71,16 +78,15 @@ function Entries({ projectId, workOrderId, date, shift }) {
 
   useEffect(() => {
     let cancelled = false;
+    const onWorkOrder = new Set(workOrder.levelIds.map((l) => l._id));
     Promise.all([
-      mastersApi.listLevels(projectId, { active: true }),
       mastersApi.listHeadings(projectId, { active: true }),
       mastersApi.listWorkers(projectId, { active: true }),
       undergroundApi.listDevelopment(projectId, workOrderId, date, shift),
     ])
-      .then(([levelList, headingList, workerList, development]) => {
+      .then(([headingList, workerList, development]) => {
         if (cancelled) return;
-        setLevels(levelList);
-        setHeadings(headingList);
+        setHeadings(headingList.filter((h) => onWorkOrder.has(h.levelId?._id)));
         setWorkers(workerList);
         setData(development);
       })
@@ -88,7 +94,7 @@ function Entries({ projectId, workOrderId, date, shift }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, workOrderId, date, shift]);
+  }, [projectId, workOrderId, workOrder.levelIds, date, shift]);
 
   if (loadError) return <ErrorBanner message={loadError} />;
   if (data === null) return <Spinner full />;
@@ -194,7 +200,6 @@ function Entries({ projectId, workOrderId, date, shift }) {
           value={headingId}
           onChange={selectHeading}
           onHeadingCreated={(h) => setHeadings((list) => [...list, h])}
-          onLevelCreated={(l) => setLevels((list) => [...list, l])}
           labelOf={headingLabel}
         />
 
