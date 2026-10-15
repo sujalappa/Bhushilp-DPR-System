@@ -1,5 +1,6 @@
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { assertNotBelow } = require('../utils/readings');
 
 // Diesel Consumed = fuel that went into the tank (opening + issued) minus
 // what's left (closing) — only meaningful if all three are known. Fuel/KM
@@ -34,6 +35,7 @@ const upsertFuelLog = asyncHandler(async (req, res) => {
   const { FuelLog, Vehicle } = req.projectModels;
   const { date, vehicleId, openingKm, closingKm, openingFuel, fuelIssued, closingFuel, remark } = req.body;
   if (!date || !vehicleId) throw new AppError('date and vehicleId are required', 400);
+  assertNotBelow(openingKm, closingKm, 'KM');
 
   const vehicle = await Vehicle.findById(vehicleId);
   if (!vehicle) throw new AppError('Vehicle not found', 404);

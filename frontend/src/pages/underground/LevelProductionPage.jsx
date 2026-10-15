@@ -14,21 +14,29 @@ import ManpowerFields from './ManpowerFields';
 import LevelFactors from './LevelFactors';
 import { useAuth } from '../../context/AuthContext';
 import { withReferenced } from '../../utils/options';
-import { CREW_KEYS, crewIdsFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
+import { CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
+import useWorkOrder from '../../hooks/useWorkOrder';
+import LabourAndBilling from './LabourAndBilling';
 
-// Underground level production on one page: date + shift at the top, one
-// entry form, then what's saved for that shift and the month's running
-// totals per level. An entry is one gang's shift on one level — keyed on
-// (date, shift, level, supervisor), so two gangs can work the same level in
-// the same shift.
+// Underground level production on one page, inside one work order: date +
+// shift at the top, one entry form, then what's saved for that shift, the
+// month's running totals per level, and the work order's labour and
+// billing figures. An entry is one gang's shift on one level — keyed on
+// (date, shift, work order, level, supervisor), so two gangs can work the
+// same level in the same shift.
 export default function LevelProductionPage() {
-  const { projectId } = useParams();
+  const { projectId, workOrderId } = useParams();
+  const { workOrder, error } = useWorkOrder(projectId, workOrderId);
 
   return (
-    <AppShell title="Level Production" backTo={`/projects/${projectId}`}>
+    <AppShell title="Level Production" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
+      {workOrder && <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>}
+      <ErrorBanner message={error} />
       <DateShiftPicker projectId={projectId}>
-        {(date, shift) => <Entries key={`${date}|${shift}`} projectId={projectId} date={date} shift={shift} />}
+        {(date, shift) => (
+          <Entries key={`${date}|${shift}`} projectId={projectId} workOrderId={workOrderId} date={date} shift={shift} />
+        )}
       </DateShiftPicker>
     </AppShell>
   );
@@ -41,19 +49,19 @@ const emptySelection = { levelId: '', supervisorId: '' };
 
 const fieldsFromEntry = (entry) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, entry[k] ?? ''])),
-  ...crewIdsFromEntry(entry),
+  ...crewNamesFromEntry(entry),
   remark: entry.remark || '',
 });
 
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const describe = (entry) => `${entry.levelId?.name || 'Level'} · ${entry.supervisorId?.name || 'Supervisor'}`;
 
-function Entries({ projectId, date, shift }) {
+function Entries({ projectId, workOrderId, date, shift }) {
   const { user } = useAuth();
   const [levels, setLevels] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
   const [workers, setWorkers] = useState([]);
-  const [data, setData] = useState(null); // { entries, monthToDate }
+  const [data, setData] = useState(null); // { entries, monthToDate, labour }
   const [loadError, setLoadError] = useState('');
 
   const [selection, setSelection] = useState(emptySelection);
@@ -64,8 +72,8 @@ function Entries({ projectId, date, shift }) {
   const formRef = useRef(null);
 
   const reload = useCallback(
-    () => undergroundApi.listProduction(projectId, date, shift).then(setData),
-    [projectId, date, shift]
+    () => undergroundApi.listProduction(projectId, workOrderId, date, shift).then(setData),
+    [projectId, workOrderId, date, shift]
   );
 
   useEffect(() => {
@@ -74,7 +82,7 @@ function Entries({ projectId, date, shift }) {
       mastersApi.listLevels(projectId, { active: true }),
       mastersApi.listSupervisors(projectId, { active: true }),
       mastersApi.listWorkers(projectId, { active: true }),
-      undergroundApi.listProduction(projectId, date, shift),
+      undergroundApi.listProduction(projectId, workOrderId, date, shift),
     ])
       .then(([levelList, supervisorList, workerList, production]) => {
         if (cancelled) return;
@@ -87,12 +95,12 @@ function Entries({ projectId, date, shift }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, date, shift]);
+  }, [projectId, workOrderId, date, shift]);
 
   if (loadError) return <ErrorBanner message={loadError} />;
   if (data === null) return <Spinner full />;
 
-  const { entries, monthToDate } = data;
+  const { entries, monthToDate, labour } = data;
   const levelOptions = withReferenced(levels, entries.map((e) => e.levelId));
   const supervisorOptions = withReferenced(supervisors, entries.map((e) => e.supervisorId));
   const workerOptions = withReferenced(workers, crewWorkers(entries));
@@ -139,14 +147,15 @@ function Entries({ projectId, date, shift }) {
     setSaving(true);
     setError('');
     try {
-      const payload = { date, shift, ...selection, remark: fields.remark.trim() };
-      [...NUMERIC_KEYS, ...CREW_KEYS].forEach((key) => {
+      const payload = { date, shift, workOrderId, ...selection, remark: fields.remark.trim() };
+      [...NUMERIC_KEYS, ...CREW_NAME_KEYS].forEach((key) => {
         payload[key] = fields[key];
       });
       const saved = await undergroundApi.upsertProduction(projectId, payload);
       // Refetched rather than patched locally, because a save also moves
-      // the month-to-date totals.
-      await reload();
+      // the month-to-date and labour totals; the worker list too, since a
+      // newly typed name was added to it.
+      await Promise.all([reload(), mastersApi.listWorkers(projectId, { active: true }).then(setWorkers)]);
       setNotice(`${editingEntry ? 'Updated' : 'Saved'}: ${describe(saved)}`);
       resetForm();
       scrollToForm();
@@ -249,11 +258,6 @@ function Entries({ projectId, date, shift }) {
               fields={fields}
               setField={setField}
               workers={workerOptions}
-              onCreateWorker={async (name) => {
-                const worker = await mastersApi.createWorker(projectId, { name });
-                setWorkers((w) => [...w, worker]);
-                return worker;
-              }}
             />
 
             <NumberField
@@ -383,6 +387,8 @@ function Entries({ projectId, date, shift }) {
           </div>
         </section>
       )}
+
+      <LabourAndBilling date={date} labour={labour} />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import TripDetails from './TripDetails';
 import { LOADING_MACHINE_CATEGORIES } from '../../utils/vehicleCategories';
 import { withReferenced, upsertById } from '../../utils/options';
 import { shiftLabel, entryCount } from '../../utils/shift';
+import { HANDLING_TYPES, handlingOf } from '../../utils/obFactors';
 
 // The whole shift card on one page: date + shift at the top (shared
 // picker), one entry form, and the list of what's already saved for that
@@ -38,11 +39,16 @@ export default function ShiftCardPage() {
 }
 
 const NUMERIC_KEYS = ['startKm', 'closeKm', 'startHrs', 'closeHrs', 'fuelOpen', 'fuelClose', 'totalTripsManual'];
-const emptyFields = { ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])), remark: '' };
+const emptyFields = {
+  ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])),
+  handlingType: HANDLING_TYPES[0].value,
+  remark: '',
+};
 const emptySelection = { vehicleId: '', driverId: '', noDriver: false };
 
 const fieldsFromLog = (log) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, log[k] ?? ''])),
+  handlingType: log.handlingType || HANDLING_TYPES[0].value,
   remark: log.remark || '',
 });
 
@@ -142,6 +148,9 @@ function ShiftEntries({ projectId, date, shift }) {
 
   const scrollToForm = () => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  const totalKm = difference(fields.startKm, fields.closeKm);
+  const totalHrs = difference(fields.startHrs, fields.closeHrs);
+
   const handleSave = async () => {
     if (selection.noDriver && !fields.remark.trim()) {
       setError('Enter the reason this vehicle had no driver.');
@@ -149,6 +158,10 @@ function ShiftEntries({ projectId, date, shift }) {
     }
     if (!selection.noDriver && fields.totalTripsManual === '') {
       setError('Total Trips is required.');
+      return;
+    }
+    if (!selection.noDriver && (totalKm < 0 || totalHrs < 0)) {
+      setError(totalKm < 0 ? "Closing KM can't be less than Starting KM." : "Closing Hrs can't be less than Starting Hrs.");
       return;
     }
 
@@ -169,6 +182,7 @@ function ShiftEntries({ projectId, date, shift }) {
         NUMERIC_KEYS.forEach((key) => {
           payload[key] = toNumberOrNull(fields[key]);
         });
+        payload.handlingType = fields.handlingType;
       }
 
       const saved = await shiftCardApi.upsertShiftLog(projectId, payload);
@@ -207,9 +221,8 @@ function ShiftEntries({ projectId, date, shift }) {
     }
   };
 
-  const totalKm = difference(fields.startKm, fields.closeKm);
-  const totalHrs = difference(fields.startHrs, fields.closeHrs);
   const shiftTrips = logs.reduce((sum, l) => sum + (l.status === 'working' ? l.totalTripsManual || 0 : 0), 0);
+  const handling = handlingOf(fields.handlingType);
 
   return (
     <div className="space-y-6">
@@ -276,8 +289,8 @@ function ShiftEntries({ projectId, date, shift }) {
               <NumberField label="Closing KM" value={fields.closeKm} onChange={setField('closeKm')} />
               <NumberField label="Starting Hrs" value={fields.startHrs} onChange={setField('startHrs')} />
               <NumberField label="Closing Hrs" value={fields.closeHrs} onChange={setField('closeHrs')} />
-              <NumberField label="Fuel Open" value={fields.fuelOpen} onChange={setField('fuelOpen')} />
-              <NumberField label="Fuel Close" value={fields.fuelClose} onChange={setField('fuelClose')} />
+              <NumberField label="Fuel Issued" value={fields.fuelOpen} onChange={setField('fuelOpen')} />
+              <NumberField label="Fuel Issued KM" value={fields.fuelClose} onChange={setField('fuelClose')} />
             </div>
 
             {(totalKm !== null || totalHrs !== null) && (
@@ -285,6 +298,8 @@ function ShiftEntries({ projectId, date, shift }) {
                 Total: {[totalKm !== null && `${totalKm} KM`, totalHrs !== null && `${totalHrs} Hrs`].filter(Boolean).join(' · ')}
               </p>
             )}
+            {totalKm < 0 && <p className="text-sm text-red-600">Closing KM can&apos;t be less than Starting KM.</p>}
+            {totalHrs < 0 && <p className="text-sm text-red-600">Closing Hrs can&apos;t be less than Starting Hrs.</p>}
 
             <NumberField
               label="Total Trips"
@@ -294,6 +309,35 @@ function ShiftEntries({ projectId, date, shift }) {
               value={fields.totalTripsManual}
               onChange={setField('totalTripsManual')}
             />
+
+            <div>
+              <span className="mb-1 block text-sm font-medium text-slate-700">Trips count as</span>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Trips count as">
+                {HANDLING_TYPES.map((h) => (
+                  <button
+                    key={h.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={fields.handlingType === h.value}
+                    onClick={() => setField('handlingType')(h.value)}
+                    className={`rounded-lg py-3 text-sm font-medium ${
+                      fields.handlingType === h.value
+                        ? 'bg-brand-600 text-white'
+                        : 'border border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    {fields.handlingType === h.value ? '✓ ' : ''}
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+              {fields.totalTripsManual !== '' && (
+                <p className="mt-1 text-sm text-slate-500">
+                  {fields.totalTripsManual} trips × {handling.perTrip} = {Number(fields.totalTripsManual) * handling.perTrip} m³{' '}
+                  {handling.label}, added to Daily Production.
+                </p>
+              )}
+            </div>
 
             <Field label="Remark (optional)" hint='e.g. "Breakdown at 10am, no more trips after"'>
               <input className={inputClass()} value={fields.remark} onChange={(e) => setField('remark')(e.target.value)} />
@@ -377,6 +421,7 @@ function SavedEntry({ log, active, tripsOpen, onToggleTrips, onEdit, onDelete, c
   const summary = working
     ? [
         `${log.totalTripsManual ?? 0} trips`,
+        `${(log.totalTripsManual ?? 0) * handlingOf(log.handlingType).perTrip} m³ ${handlingOf(log.handlingType).label}`,
         km !== null && `${km} KM`,
         hrs !== null && `${hrs} Hrs`,
       ]

@@ -47,6 +47,9 @@ export function getLandingPath(user) {
   if (user.isSuperAdmin) return '/projects';
   if (user.assignments.length === 1 && user.assignments[0].forms.length === 1) {
     const { projectId, forms } = user.assignments[0];
+    // Underground forms live inside a work order, so land on the project's
+    // work-order list instead.
+    if (forms[0].startsWith('ug-')) return `/projects/${projectId}`;
     return `/projects/${projectId}/${forms[0]}`;
   }
   return '/projects';

@@ -12,19 +12,26 @@ import DateShiftPicker from '../../components/DateShiftPicker';
 import ManpowerFields from './ManpowerFields';
 import HeadingPicker from './HeadingPicker';
 import { withReferenced } from '../../utils/options';
-import { CREW_KEYS, crewIdsFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
+import { CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
+import useWorkOrder from '../../hooks/useWorkOrder';
 
-// Underground development on one page: date + shift at the top, one entry
-// form, then what's saved for that shift and the metres driven to date on
-// each heading. An entry is one shift's work on one heading.
+// Underground development on one page, inside one work order: date + shift
+// at the top, one entry form, then what's saved for that shift and the
+// metres driven to date on each heading. An entry is one shift's work on
+// one heading.
 export default function DevelopmentPage() {
-  const { projectId } = useParams();
+  const { projectId, workOrderId } = useParams();
+  const { workOrder, error } = useWorkOrder(projectId, workOrderId);
 
   return (
-    <AppShell title="Development" backTo={`/projects/${projectId}`}>
+    <AppShell title="Development" backTo={`/projects/${projectId}/wo/${workOrderId}`}>
+      {workOrder && <p className="mb-4 text-sm font-medium text-slate-600">Work order {workOrder.number}</p>}
+      <ErrorBanner message={error} />
       <DateShiftPicker projectId={projectId}>
-        {(date, shift) => <Entries key={`${date}|${shift}`} projectId={projectId} date={date} shift={shift} />}
+        {(date, shift) => (
+          <Entries key={`${date}|${shift}`} projectId={projectId} workOrderId={workOrderId} date={date} shift={shift} />
+        )}
       </DateShiftPicker>
     </AppShell>
   );
@@ -36,14 +43,14 @@ const emptyFields = { ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])), .
 
 const fieldsFromEntry = (entry) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, entry[k] ?? ''])),
-  ...crewIdsFromEntry(entry),
+  ...crewNamesFromEntry(entry),
   remark: entry.remark || '',
 });
 
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const headingLabel = (h) => `${h?.levelId?.name || 'Level'} · ${h?.name || 'Heading'}`;
 
-function Entries({ projectId, date, shift }) {
+function Entries({ projectId, workOrderId, date, shift }) {
   const [levels, setLevels] = useState([]);
   const [headings, setHeadings] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -58,8 +65,8 @@ function Entries({ projectId, date, shift }) {
   const formRef = useRef(null);
 
   const reload = useCallback(
-    () => undergroundApi.listDevelopment(projectId, date, shift).then(setData),
-    [projectId, date, shift]
+    () => undergroundApi.listDevelopment(projectId, workOrderId, date, shift).then(setData),
+    [projectId, workOrderId, date, shift]
   );
 
   useEffect(() => {
@@ -68,7 +75,7 @@ function Entries({ projectId, date, shift }) {
       mastersApi.listLevels(projectId, { active: true }),
       mastersApi.listHeadings(projectId, { active: true }),
       mastersApi.listWorkers(projectId, { active: true }),
-      undergroundApi.listDevelopment(projectId, date, shift),
+      undergroundApi.listDevelopment(projectId, workOrderId, date, shift),
     ])
       .then(([levelList, headingList, workerList, development]) => {
         if (cancelled) return;
@@ -81,7 +88,7 @@ function Entries({ projectId, date, shift }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, date, shift]);
+  }, [projectId, workOrderId, date, shift]);
 
   if (loadError) return <ErrorBanner message={loadError} />;
   if (data === null) return <Spinner full />;
@@ -128,19 +135,20 @@ function Entries({ projectId, date, shift }) {
     setSaving(true);
     setError('');
     try {
-      const payload = { date, shift, headingId, remark: fields.remark.trim() };
+      const payload = { date, shift, workOrderId, headingId, remark: fields.remark.trim() };
       NUMERIC_KEYS.forEach((key) => {
         // An ore drive has no filling; don't keep a value typed before the
         // heading was switched to one.
         payload[key] = key === 'filling' && isOreDrive ? '' : fields[key];
       });
-      CREW_KEYS.forEach((key) => {
+      CREW_NAME_KEYS.forEach((key) => {
         payload[key] = fields[key];
       });
       const saved = await undergroundApi.upsertDevelopment(projectId, payload);
       // Refetched rather than patched locally, because a save also moves
-      // the heading's progress to date.
-      await reload();
+      // the heading's progress to date; the worker list too, since a newly
+      // typed name was added to it.
+      await Promise.all([reload(), mastersApi.listWorkers(projectId, { active: true }).then(setWorkers)]);
       setNotice(`${editingEntry ? 'Updated' : 'Saved'}: ${headingLabel(saved.headingId)}`);
       resetForm();
       scrollToForm();
@@ -199,11 +207,6 @@ function Entries({ projectId, date, shift }) {
               fields={fields}
               setField={setField}
               workers={workerOptions}
-              onCreateWorker={async (name) => {
-                const worker = await mastersApi.createWorker(projectId, { name });
-                setWorkers((w) => [...w, worker]);
-                return worker;
-              }}
             />
 
             <div className="grid grid-cols-2 gap-3">

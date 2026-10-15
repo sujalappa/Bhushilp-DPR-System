@@ -119,6 +119,10 @@ function FuelEntries({ projectId, date }) {
       setError('Enter Fuel Issued, or at least one reading.');
       return;
     }
+    if (fields.openingKm !== '' && fields.closingKm !== '' && Number(fields.closingKm) < Number(fields.openingKm)) {
+      setError("Closing KM can't be less than Opening KM.");
+      return;
+    }
     setSaving(true);
     setError('');
     try {

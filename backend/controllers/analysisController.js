@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { round } = require('../utils/numbers');
+const { OB_PER_TRIP } = require('../utils/obFactors');
 const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugProductionController');
 
 // One endpoint that turns a project's entries for a date range into the
@@ -8,7 +9,6 @@ const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugPr
 // rather than in Mongo because tons depend on each level's conversion
 // factors; a mine's entries for a year are a few thousand rows.
 
-const OB_REHANDLING_PER_TRIP = 14;
 const dayOf = (date) => new Date(date).toISOString().slice(0, 10);
 
 function dateMatch({ from, to }) {
@@ -136,14 +136,28 @@ async function openCastAnalysis(models, query) {
     models.FuelLog.find(match).populate('vehicleId', 'name'),
   ]);
 
+  // Daily production = Hard OB entered that day + OB Rehandling + Soft OB,
+  // the last two derived from each Shift Card entry's trips by the handling
+  // it was marked as — so a day with trips counts even if nobody opened the
+  // Daily Production form.
   let trips = 0;
+  let obRehandling = 0;
+  let softOB = 0;
+  const productionByDay = {};
   const tripsByDayShift = {};
   const vehicleTotals = {};
   const driverTotals = {};
   logs.forEach((l) => {
     const count = l.totalTripsManual || 0;
+    const day = dayOf(l.date);
+    const ob = count * OB_PER_TRIP[l.handlingType];
     trips += count;
-    add(tripsByDayShift, [dayOf(l.date), l.shift], count);
+    if (l.handlingType === 'soft-ob') softOB += ob;
+    else obRehandling += ob;
+    add(productionByDay, [day, 'hardOB'], 0);
+    add(productionByDay, [day, 'obRehandling'], l.handlingType === 'soft-ob' ? 0 : ob);
+    add(productionByDay, [day, 'softOB'], l.handlingType === 'soft-ob' ? ob : 0);
+    add(tripsByDayShift, [day, l.shift], count);
     add(vehicleTotals, [l.vehicleId?.name || 'Unknown vehicle', 'trips'], count);
     add(vehicleTotals, [l.vehicleId?.name || 'Unknown vehicle', 'shifts'], 1);
     if (l.driverId) {
@@ -152,22 +166,14 @@ async function openCastAnalysis(models, query) {
     }
   });
 
-  // Daily production = Hard OB entered that day + OB Rehandling, which is
-  // derived from trips (14 per trip), so a day with trips counts even if
-  // nobody opened the Daily Production form.
   let hardOB = 0;
   let target = 0;
-  const productionByDay = {};
-  Object.entries(tripsByDayShift).forEach(([day, shifts]) => {
-    const dayTrips = Object.values(shifts).reduce((sum, n) => sum + n, 0);
-    add(productionByDay, [day, 'obRehandling'], dayTrips * OB_REHANDLING_PER_TRIP);
-    add(productionByDay, [day, 'hardOB'], 0);
-  });
   production.forEach((p) => {
     hardOB += p.hardOB || 0;
     target += p.target || 0;
     add(productionByDay, [dayOf(p.date), 'hardOB'], p.hardOB);
     add(productionByDay, [dayOf(p.date), 'obRehandling'], 0);
+    add(productionByDay, [dayOf(p.date), 'softOB'], 0);
   });
 
   let fuelIssued = 0;
@@ -179,14 +185,14 @@ async function openCastAnalysis(models, query) {
     add(fuelByVehicle, [f.vehicleId?.name || 'Unknown vehicle', 'litres'], f.fuelIssued);
   });
 
-  const obRehandling = trips * OB_REHANDLING_PER_TRIP;
-  const totalCum = hardOB + obRehandling;
+  const totalCum = hardOB + obRehandling + softOB;
 
   return {
     kind: 'open-cast',
     kpis: {
       trips,
       obRehandling,
+      softOB,
       hardOB: round(hardOB),
       totalCum: round(totalCum),
       target: round(target),

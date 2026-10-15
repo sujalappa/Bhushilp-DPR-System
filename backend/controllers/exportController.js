@@ -4,7 +4,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const { withComputed } = require('./dailyProductionController');
 const { withComputed: withFuelComputed } = require('./fuelController');
 const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugProductionController');
-const { getShiftTripTotal } = require('../utils/tripCount');
+const { getShiftTripsByHandling } = require('../utils/tripCount');
+
+const HANDLING_LABELS = { 'ob-rehandling': 'OB Rehandling', 'soft-ob': 'Soft OB' };
 const { crewPopulate, crewNames } = require('../utils/crew');
 
 const toDateOnly = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
@@ -65,7 +67,7 @@ async function fetchShiftLogRows(models, query) {
     'Date', 'Shift', 'Vehicle', 'Driver', 'Status',
     'Starting KM', 'Closing KM', 'Total KM',
     'Starting Hrs', 'Closing Hrs', 'Total Hrs',
-    'Fuel Open', 'Fuel Close', 'Total Trips', 'Remark',
+    'Fuel Issued', 'Fuel Issued KM', 'Total Trips', 'Handling', 'Remark',
   ];
   const rows = logs.map((l) => ({
     Date: toDateOnly(l.date),
@@ -79,9 +81,10 @@ async function fetchShiftLogRows(models, query) {
     'Starting Hrs': l.startHrs ?? '',
     'Closing Hrs': l.closeHrs ?? '',
     'Total Hrs': l.startHrs != null && l.closeHrs != null ? l.closeHrs - l.startHrs : '',
-    'Fuel Open': l.fuelOpen ?? '',
-    'Fuel Close': l.fuelClose ?? '',
+    'Fuel Issued': l.fuelOpen ?? '',
+    'Fuel Issued KM': l.fuelClose ?? '',
     'Total Trips': l.totalTripsManual ?? '',
+    Handling: l.status === 'working' ? HANDLING_LABELS[l.handlingType] : '',
     Remark: l.remark || '',
   }));
   return { columns, rows };
@@ -105,8 +108,8 @@ async function fetchProductionRows(models, query) {
 
   const columns = ['Date', 'Shift', 'Hard OB', 'Soft OB', 'OB Rehandling', 'Total Cum', 'Target', 'Achievement %', 'Remarks'];
   const rows = await Promise.all(entries.map(async (e) => {
-    const tripCount = await getShiftTripTotal(models, e.date, e.shift);
-    const c = withComputed(e, tripCount);
+    const trips = await getShiftTripsByHandling(models, e.date, e.shift);
+    const c = withComputed(e, trips);
     return {
       Date: toDateOnly(c.date),
       Shift: c.shift,
@@ -156,13 +159,14 @@ const crewNameColumns = (entry) => ({
 
 async function fetchUgProductionRows(models, query) {
   const entries = await models.UgProduction.find(buildDateFilter(query))
+    .populate('workOrderId', 'number')
     .populate('levelId', LEVEL_FIELDS)
     .populate('supervisorId', 'name')
     .populate(crewPopulate)
     .sort({ date: 1, shift: 1, createdAt: 1 });
 
   const columns = [
-    'Date', 'Shift', 'Level', 'Supervisor Name',
+    'Date', 'Shift', 'Work Order', 'Level', 'Supervisor Name',
     'Supervisor', 'Driller', 'Helper', 'Mucker', 'Blaster', 'Total Manpower',
     'Tubs', 'Tons', 'M3', 'OMS',
     'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
@@ -172,6 +176,7 @@ async function fetchUgProductionRows(models, query) {
     return {
       Date: toDateOnly(c.date),
       Shift: c.shift,
+      'Work Order': c.workOrderId?.number || '',
       Level: c.levelId?.name || '',
       'Supervisor Name': c.supervisorId?.name || '',
       Supervisor: c.supervisors ?? '',
@@ -193,12 +198,13 @@ async function fetchUgProductionRows(models, query) {
 
 async function fetchUgDevelopmentRows(models, query) {
   const entries = await models.UgDevelopment.find(buildDateFilter(query))
+    .populate('workOrderId', 'number')
     .populate({ path: 'headingId', populate: { path: 'levelId', select: 'name' } })
     .populate(crewPopulate)
     .sort({ date: 1, shift: 1, createdAt: 1 });
 
   const columns = [
-    'Date', 'Shift', 'Level', 'Heading',
+    'Date', 'Shift', 'Work Order', 'Level', 'Heading',
     'Supervisor', 'Driller', 'Helper', 'Blaster', 'Mucker',
     'Tons', 'Filling', 'Progress (m)',
     'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
@@ -206,6 +212,7 @@ async function fetchUgDevelopmentRows(models, query) {
   const rows = entries.map((e) => ({
     Date: toDateOnly(e.date),
     Shift: e.shift,
+    'Work Order': e.workOrderId?.number || '',
     Level: e.headingId?.levelId?.name || '',
     Heading: e.headingId?.name || '',
     Supervisor: e.supervisors ?? '',

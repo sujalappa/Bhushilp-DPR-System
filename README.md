@@ -17,20 +17,31 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
   - **Shift Card** — the digitized version of the paper "Tipper/Dumper
     Driver Shift Card". One page: pick date, shift, vehicle and driver, fill
     in the card, save; entries already saved for that shift are listed
-    underneath. One entry per date+shift+vehicle+driver.
-  - **Daily Production** — one entry per date+shift.
+    underneath. One entry per date+shift+vehicle+driver. Each entry is
+    ticked as OB Rehandling or Soft OB; its trips count towards that column
+    of Daily Production (per-trip figures in `backend/utils/obFactors.js`).
+  - **Daily Production** — one entry per date+shift. OB Rehandling and Soft
+    OB are filled in from the Shift Card.
   - **Daily Fuel Consumption** — one page, one entry per date+vehicle.
 - **Underground projects have their own forms.** A project's type (Open
-  Cast, Underground, Exploration) decides which forms it shows:
-  - **Level Production** — one entry per date+shift+level+supervisor (a
-    gang): head counts and tubs. Tons, m³ and OMS are calculated from that
-    level's own conversion factors, shown under the level picker on the
-    form, where the superadmin can edit them.
-  - **Development** — one entry per date+shift+heading (e.g. "-170 Ore
-    Drive"): head counts, ore or rock tons, filling and metres of progress,
-    with a running total per heading.
-  - On both, the supervisor can also name who the drillers, helpers,
-    muckers and blasters were, picked from one shared list of workers.
+  Cast, Underground, Exploration) decides which forms it shows. An
+  underground project opens on its **work orders** (e.g. 9100005472); the
+  forms sit inside a work order, and each work order holds its own rate per
+  m³ and wage rates.
+  - **Level Production** — one entry per date+shift+work order+level+
+    supervisor (a gang): head counts and tubs. Tons, m³ and OMS are
+    calculated from that level's own conversion factors, shown under the
+    level picker on the form, where the superadmin can edit them. Below the
+    form: the workbook's labour and billing block (driller and helper
+    man-shifts converted to m³, Total Cum, Billing amount) for the day and
+    month to date.
+  - **Development** — one entry per date+shift+work order+heading (e.g.
+    "-170 Ore Drive"): head counts, ore or rock tons, filling and metres of
+    progress, with a running total per heading.
+  - On both, entering a head count opens that many name boxes. Names are
+    optional; the server matches them to one shared list of workers.
+  - `backend/scripts/assignWorkOrder.js` moves entries saved before work
+    orders existed under a work order.
 - **Superadmin Analysis** (`/admin/analysis`) — charts over a project's
   entries for a chosen period (production, manpower, trips, fuel,
   development progress), each with a table view of the same figures. The

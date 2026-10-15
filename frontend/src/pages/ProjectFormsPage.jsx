@@ -6,6 +6,7 @@ import AppShell from '../components/AppShell';
 import ErrorBanner from '../components/ErrorBanner';
 import Spinner from '../components/Spinner';
 import { formsForProjectType } from '../utils/forms';
+import WorkOrderList from './underground/WorkOrderList';
 
 // The "cards" screen for one project — sits between the project list and
 // an actual form. Which cards appear depends on the project's type: an
@@ -44,6 +45,15 @@ export default function ProjectFormsPage() {
   // a preview of what's coming; implemented ones stay gated by assignment,
   // same as everywhere else in the app.
   const visibleForms = formsForProjectType(project.type).filter((f) => !f.implemented || hasFormAccess(f.slug));
+
+  // An underground mine's forms sit one level down, inside a work order.
+  if (project.type === 'underground') {
+    return (
+      <AppShell title={project.name} backTo="/projects">
+        <WorkOrderList projectId={projectId} canManage={user.isSuperAdmin} />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title={project.name} backTo="/projects">

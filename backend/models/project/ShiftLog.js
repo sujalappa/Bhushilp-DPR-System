@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { HANDLING_TYPES } = require('../../utils/obFactors');
 
 const shiftLogSchema = new mongoose.Schema(
   {
@@ -22,13 +23,19 @@ const shiftLogSchema = new mongoose.Schema(
     closeKm: Number,
     startHrs: Number,
     closeHrs: Number,
+    // Shown on the card as "Fuel Issued" (litres) and "Fuel Issued KM"
+    // (odometer reading when it was issued). Field names kept from when
+    // these were opening/closing fuel, so existing entries still read.
     fuelOpen: Number,
     fuelClose: Number,
+    // Which column of Daily Production this entry's trips count towards.
+    // Trips × the per-trip figure in utils/obFactors.
+    handlingType: { type: String, enum: HANDLING_TYPES, default: 'ob-rehandling' },
     // The trip count for this driver segment, written down directly by
     // whoever reviews the card — required for every working segment
     // (enforced in the controller). This is the ONLY number every
-    // trip-count calculation uses (OB Rehandling, the driver rewards
-    // leaderboard — see utils/tripCount.getShiftTripTotal). Individual Trip
+    // trip-count calculation uses (OB Rehandling, Soft OB, the driver rewards
+    // leaderboard — see utils/tripCount). Individual Trip
     // documents below are detail records only (loading/unloading time,
     // machine, loading point per trip) and are never counted towards a
     // total — matching how the real paper process was actually filled in.

@@ -28,10 +28,9 @@ export const listSupervisors = (projectId, params = {}) =>
 export const createSupervisor = (projectId, payload) =>
   client.post(path(projectId, 'supervisors'), payload).then((r) => r.data.data);
 
+// Workers are added by the server when a new name is typed on an entry.
 export const listWorkers = (projectId, params = {}) =>
   client.get(path(projectId, 'workers'), { params }).then((r) => r.data.data);
-export const createWorker = (projectId, payload) =>
-  client.post(path(projectId, 'workers'), payload).then((r) => r.data.data);
 
 export const listHeadings = (projectId, params = {}) =>
   client.get(path(projectId, 'headings'), { params }).then((r) => r.data.data);

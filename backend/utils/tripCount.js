@@ -1,13 +1,19 @@
-// Trip count for a (date, shift): the sum of each working driver segment's
-// ShiftLog.totalTripsManual — the number the supervisor actually wrote down
-// on the card. Individual Trip documents are detail records only (loading/
-// unloading time, machine, loading point per trip) and are never counted
-// here — every consumer that needs "how many trips happened this shift"
-// (OB Rehandling, the driver rewards leaderboard) goes through this.
-async function getShiftTripTotal(models, date, shift) {
+// Trips for a (date, shift), split by the kind of handling each Shift Card
+// entry was marked as: { 'ob-rehandling': n, 'soft-ob': n }. Each entry
+// counts its ShiftLog.totalTripsManual — the number the supervisor wrote on
+// the card. Individual Trip documents are detail records only and are never
+// counted. Entries saved before the handling type existed count as OB
+// Rehandling (the schema default), which is what they were.
+const { HANDLING_TYPES } = require('./obFactors');
+
+async function getShiftTripsByHandling(models, date, shift) {
   const { ShiftLog } = models;
-  const logs = await ShiftLog.find({ date, shift, status: 'working' }, { totalTripsManual: 1 });
-  return logs.reduce((sum, l) => sum + (l.totalTripsManual || 0), 0);
+  const logs = await ShiftLog.find({ date, shift, status: 'working' }, { totalTripsManual: 1, handlingType: 1 });
+  const trips = Object.fromEntries(HANDLING_TYPES.map((t) => [t, 0]));
+  logs.forEach((l) => {
+    trips[l.handlingType] = (trips[l.handlingType] || 0) + (l.totalTripsManual || 0);
+  });
+  return trips;
 }
 
-module.exports = { getShiftTripTotal };
+module.exports = { getShiftTripsByHandling };

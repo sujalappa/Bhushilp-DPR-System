@@ -5,6 +5,7 @@ import AppShell from '../../components/AppShell';
 import Button from '../../components/Button';
 import Field, { inputClass } from '../../components/Field';
 import NumberField from '../../components/NumberField';
+import { handlingOf } from '../../utils/obFactors';
 import ErrorBanner from '../../components/ErrorBanner';
 import Spinner from '../../components/Spinner';
 import DateShiftPicker from '../../components/DateShiftPicker';
@@ -30,7 +31,15 @@ const emptyForm = { hardOB: 0, target: 0, remark: '' };
 function ProductionForm({ projectId, date, shift }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
-  const [computed, setComputed] = useState({ obRehandling: 0, totalCum: 0, achievementPct: null });
+  // Figures the server derives from the Shift Card's trips.
+  const [computed, setComputed] = useState({
+    obRehandling: 0,
+    softOB: 0,
+    rehandlingTrips: 0,
+    softObTrips: 0,
+    totalCum: 0,
+    achievementPct: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -49,7 +58,7 @@ function ProductionForm({ projectId, date, shift }) {
           target: d.target ?? 0,
           remark: d.remark || '',
         });
-        setComputed({ obRehandling: d.obRehandling, totalCum: d.totalCum, achievementPct: d.achievementPct });
+        setComputed(d);
       })
       .catch((err) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
@@ -72,7 +81,7 @@ function ProductionForm({ projectId, date, shift }) {
         remark: form.remark || undefined,
       };
       const saved = await productionApi.upsertProduction(projectId, payload);
-      setComputed({ obRehandling: saved.obRehandling, totalCum: saved.totalCum, achievementPct: saved.achievementPct });
+      setComputed(saved);
       setLocked(true);
     } catch (err) {
       setError(err.message);
@@ -107,13 +116,22 @@ function ProductionForm({ projectId, date, shift }) {
     <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="grid grid-cols-2 gap-3">
         <NumberField label="Hard OB" value={form.hardOB} onChange={(hardOB) => update({ hardOB })} />
-        <Field label="Soft OB" hint="Not in use yet — rehandling formula will move here later">
-          <input type="number" className={`${inputClass()} bg-slate-100 text-slate-400`} value={0} disabled readOnly />
-        </Field>
-        <Field label="OB Rehandling" hint="Auto: 14 x trips logged this shift">
+        <Field label="Soft OB" hint={`Auto: ${computed.softObTrips} Soft OB trips on the Shift Card × ${handlingOf('soft-ob').perTrip}`}>
           <input
             type="number"
-            className={`${inputClass()} bg-slate-100 text-slate-400`}
+            className={`${inputClass()} bg-slate-100 text-slate-500`}
+            value={computed.softOB ?? 0}
+            disabled
+            readOnly
+          />
+        </Field>
+        <Field
+          label="OB Rehandling"
+          hint={`Auto: ${computed.rehandlingTrips} OB Rehandling trips on the Shift Card × ${handlingOf('ob-rehandling').perTrip}`}
+        >
+          <input
+            type="number"
+            className={`${inputClass()} bg-slate-100 text-slate-500`}
             value={computed.obRehandling ?? 0}
             disabled
             readOnly

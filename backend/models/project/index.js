@@ -13,6 +13,7 @@ module.exports = {
   DailyProduction: require('./DailyProduction'),
   FuelLog: require('./FuelLog'),
   // Underground projects
+  WorkOrder: require('./WorkOrder'),
   Level: require('./Level'),
   Supervisor: require('./Supervisor'),
   Worker: require('./Worker'),

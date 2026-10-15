@@ -1,5 +1,7 @@
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { HANDLING_TYPES } = require('../utils/obFactors');
+const { assertNotBelow } = require('../utils/readings');
 
 const listShiftLogs = asyncHandler(async (req, res) => {
   const { ShiftLog } = req.projectModels;
@@ -33,7 +35,7 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   const { ShiftLog, Vehicle } = req.projectModels;
   const {
     date, shift, vehicleId, driverId, status,
-    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark, totalTripsManual,
+    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark, totalTripsManual, handlingType,
   } = req.body;
 
   if (!date || !shift || !vehicleId) {
@@ -53,6 +55,11 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   if (resolvedStatus === 'working' && (totalTripsManual === '' || totalTripsManual == null)) {
     throw new AppError('Total Trips is required for a working shift segment', 400);
   }
+  if (handlingType !== undefined && !HANDLING_TYPES.includes(handlingType)) {
+    throw new AppError(`handlingType must be one of: ${HANDLING_TYPES.join(', ')}`, 400);
+  }
+  assertNotBelow(startKm, closeKm, 'KM');
+  assertNotBelow(startHrs, closeHrs, 'hours');
 
   // Normalized to `null` (never `undefined`) so every request that omits a
   // driver resolves to the same single "no driver assigned" record for this
@@ -76,6 +83,7 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
     // individual Trip rows happen to exist below (those are detail records
     // only, e.g. loading/unloading time per trip; they're never counted).
     setFields.totalTripsManual = Number(totalTripsManual);
+    if (handlingType) setFields.handlingType = handlingType;
   }
 
   const log = await ShiftLog.findOneAndUpdate(

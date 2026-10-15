@@ -6,11 +6,10 @@ const mongoose = require('mongoose');
 // practice, but the field stays optional in case a project wants to track
 // it going forward.
 //
-// OB Rehandling is NOT stored here — it's computed on read as
-// 14 x (sum of ShiftLog.totalTripsManual for that date+shift), see
-// dailyProductionController.withComputed and utils/tripCount. Soft OB is locked at 0 in the UI
-// for now (the real process doesn't fill it yet); the field stays on the
-// schema for when the rehandling formula moves to Soft OB in future.
+// OB Rehandling and Soft OB are NOT stored here — both are computed on read
+// from the Shift Card's trips, each entry counting towards the column it
+// was marked as (see dailyProductionController.withComputed). The softOB
+// field is left over from before that and is no longer read.
 const dailyProductionSchema = new mongoose.Schema(
   {
     date: { type: Date, required: true },

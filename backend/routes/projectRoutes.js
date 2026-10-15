@@ -36,6 +36,7 @@ router.use('/:projectId/analysis', resolveProjectConn, analysisRoutes);
 
 // Underground projects only.
 const ug = [resolveProjectConn, requireProjectType('underground')];
+router.use('/:projectId/work-orders', ug, underground.workOrderRoutes);
 router.use('/:projectId/levels', ug, underground.levelRoutes);
 router.use('/:projectId/supervisors', ug, underground.supervisorRoutes);
 router.use('/:projectId/workers', ug, underground.workerRoutes);

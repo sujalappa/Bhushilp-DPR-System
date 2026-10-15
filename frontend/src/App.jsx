@@ -12,6 +12,7 @@ import ProductionDatePage from './pages/production/ProductionDatePage';
 import FuelPage from './pages/fuel/FuelPage';
 import LevelProductionPage from './pages/underground/LevelProductionPage';
 import DevelopmentPage from './pages/underground/DevelopmentPage';
+import WorkOrderPage from './pages/underground/WorkOrderPage';
 import ManageUsers from './pages/admin/ManageUsers';
 import DataExport from './pages/admin/DataExport';
 
@@ -78,7 +79,15 @@ export default function App() {
           />
 
           <Route
-            path="/projects/:projectId/ug-production"
+            path="/projects/:projectId/wo/:workOrderId"
+            element={
+              <RequireAuth>
+                <WorkOrderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/projects/:projectId/wo/:workOrderId/ug-production"
             element={
               <RequireFormAccess formSlug="ug-production">
                 <LevelProductionPage />
@@ -86,7 +95,7 @@ export default function App() {
             }
           />
           <Route
-            path="/projects/:projectId/ug-development"
+            path="/projects/:projectId/wo/:workOrderId/ug-development"
             element={
               <RequireFormAccess formSlug="ug-development">
                 <DevelopmentPage />
