@@ -1,5 +1,6 @@
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { normalizeLevelName } = require('../utils/levelName');
 
 const FACTOR_KEYS = ['tonsPerTub', 'tonsPerCubicMetre'];
 
@@ -26,15 +27,22 @@ function applyFactors(level, body) {
   });
 }
 
-// Anyone on the project can add a level by name while filling a form. It
-// starts on the default factors; changing them goes through `update`,
-// which is superadmin-only.
+// The name in house style ("-370'L"), refused if another level already has
+// it — compared in house style too, so "-370L" saved before this matches.
+async function checkedName(Level, rawName, exceptId) {
+  const name = normalizeLevelName(rawName);
+  if (!name) throw new AppError('name is required', 400);
+  const others = await Level.find(exceptId ? { _id: { $ne: exceptId } } : {}, { name: 1 });
+  const clash = others.find((l) => normalizeLevelName(l.name).toLowerCase() === name.toLowerCase());
+  if (clash) throw new AppError(`${clash.name} already exists — tick it instead`, 409);
+  return name;
+}
+
+// The superadmin adds levels from the work order form. A level starts on
+// the default factors; changing them goes through `update`.
 const create = asyncHandler(async (req, res) => {
   const { Level } = req.projectModels;
-  const { name } = req.body;
-  if (!name) throw new AppError('name is required', 400);
-
-  const level = await Level.create({ name });
+  const level = await Level.create({ name: await checkedName(Level, req.body.name) });
   res.status(201).json({ success: true, data: level });
 });
 
@@ -44,7 +52,7 @@ const update = asyncHandler(async (req, res) => {
   if (!level) throw new AppError('Level not found', 404);
 
   const { name, active } = req.body;
-  if (name !== undefined) level.name = name;
+  if (name !== undefined) level.name = await checkedName(Level, name, level._id);
   if (active !== undefined) level.active = active;
   applyFactors(level, req.body);
   await level.save();

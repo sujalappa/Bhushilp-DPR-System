@@ -5,6 +5,7 @@ import Field, { inputClass } from '../../components/Field';
 import NumberField from '../../components/NumberField';
 import ErrorBanner from '../../components/ErrorBanner';
 import { WORK_ORDER_FORMS } from '../../utils/workOrder';
+import { normalizeLevelName } from '../../utils/levelName';
 
 const RATE_KEYS = ['ratePerCubicMetre', 'wageMarkupPct', 'drillerWage', 'helperWage'];
 
@@ -153,6 +154,9 @@ export default function WorkOrderForm({ projectId, title, initial, onSubmit, onS
               Cancel
             </Button>
           </div>
+        )}
+        {levelBoxOpen && newLevel.trim() && normalizeLevelName(newLevel) !== newLevel.trim() && (
+          <p className="mt-1 text-sm text-slate-500">Will be saved as {normalizeLevelName(newLevel)}</p>
         )}
       </div>
 
