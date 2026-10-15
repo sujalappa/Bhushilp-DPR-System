@@ -42,6 +42,15 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
     optional; the server matches them to one shared list of workers.
   - `backend/scripts/assignWorkOrder.js` moves entries saved before work
     orders existed under a work order.
+  - **Works offline.** The app can be added to a phone's home screen and
+    opens with no signal (`frontend/public/sw.js`). Level Production and
+    Development entries saved without signal stay on the phone, marked
+    "waiting to send", and are sent when the signal returns
+    (`frontend/src/offline/`). An entry the server refuses stays on the
+    phone with the reason, to fix or discard. Things that need the server
+    while offline (adding a heading, deleting, labour and billing, admin
+    pages) say so. Production builds only; `npm run dev` has no service
+    worker.
 - **Superadmin Analysis** (`/admin/analysis`) — charts over a project's
   entries for a chosen period (production, manpower, trips, fuel,
   development progress), each with a table view of the same figures. The

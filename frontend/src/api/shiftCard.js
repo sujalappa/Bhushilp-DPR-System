@@ -2,7 +2,12 @@ import client from './client';
 
 export const getShiftStatus = (projectId, date, shift) =>
   client
-    .get(`/projects/${projectId}/shift-status`, { params: { date, shift } })
+    // Offline with nothing kept for this shift, assume it's working (the
+    // server's own default) so the form can still be filled in.
+    .get(`/projects/${projectId}/shift-status`, {
+      params: { date, shift },
+      offlineFallback: { date, shift, status: 'working' },
+    })
     .then((r) => r.data.data);
 
 export const setShiftStatus = (projectId, payload) =>

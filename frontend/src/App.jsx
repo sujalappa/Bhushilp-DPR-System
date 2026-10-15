@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth, getLandingPath } from './context/AuthContext';
 import { RequireAuth, RequireSuperAdmin, RequireFormAccess } from './routes/ProtectedRoute';
 import Spinner from './components/Spinner';
+import OfflineSync from './offline/OfflineSync';
 
 import Login from './pages/Login';
 import ProjectList from './pages/ProjectList';
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <OfflineSync />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Landing />} />

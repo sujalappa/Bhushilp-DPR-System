@@ -17,7 +17,9 @@ const PERIODS = [
 //
 // Billing figures are for the superadmin only: the server leaves `labour`
 // out (null) for everyone else, and the section then says so when opened.
-export default function LabourAndBilling({ date, labour }) {
+// `canView` tells that apart from the superadmin being offline with nothing
+// loaded for the day.
+export default function LabourAndBilling({ date, labour, canView }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,6 +42,8 @@ export default function LabourAndBilling({ date, labour }) {
         <div className="border-t border-slate-100 p-4 pt-3">
           {labour ? (
             <Figures date={date} labour={labour} />
+          ) : canView ? (
+            <p className="text-sm text-slate-600">Needs internet to load. Open this again once there&apos;s signal.</p>
           ) : (
             <p className="text-sm text-slate-600">Not accessible. Only admins can see labour and billing figures.</p>
           )}

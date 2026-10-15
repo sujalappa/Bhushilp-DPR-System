@@ -22,13 +22,15 @@ function computeFromTubs(tubs, level) {
 
 // Expects `levelId` populated with LEVEL_FIELDS. OMS is
 // (Supervisor + Mucker + Blaster) / Tons, as the site defines it, and is
-// blank when nothing was produced.
+// blank when nothing was produced. Driller + Helper is the workbook's
+// "DRILLER HELPER" column: the man-shifts the labour billing is based on.
 function withComputed(doc) {
   const obj = doc.toObject ? doc.toObject() : doc;
   const { tons, cubicMetres } = computeFromTubs(obj.tubs, obj.levelId);
   const totalManpower = COUNT_KEYS.reduce((sum, k) => sum + (obj[k] || 0), 0);
   const oms = tons > 0 ? round(((obj.supervisors || 0) + (obj.muckers || 0) + (obj.blasters || 0)) / tons) : null;
-  return { ...obj, tons, cubicMetres, totalManpower, oms };
+  const drillerHelper = (obj.drillers || 0) + (obj.helpers || 0);
+  return { ...obj, tons, cubicMetres, totalManpower, drillerHelper, oms };
 }
 
 // The labour and billing block from the workbook, for a set of entries
@@ -119,8 +121,9 @@ const listUgProduction = asyncHandler(async (req, res) => {
   const byLevel = new Map();
   month.forEach((e) => {
     const key = e.levelId?._id?.toString() || 'unknown';
-    const row = byLevel.get(key) || { levelId: e.levelId?._id, levelName: e.levelId?.name || '', tubs: 0, tons: 0, cubicMetres: 0 };
+    const row = byLevel.get(key) || { levelId: e.levelId?._id, levelName: e.levelId?.name || '', tubs: 0, drillerHelper: 0, tons: 0, cubicMetres: 0 };
     row.tubs += e.tubs || 0;
+    row.drillerHelper += e.drillerHelper;
     row.tons += e.tons;
     row.cubicMetres += e.cubicMetres;
     byLevel.set(key, row);
@@ -144,21 +147,32 @@ const listUgProduction = asyncHandler(async (req, res) => {
   });
 });
 
+// The entry's supervisor, by id, or by name for one typed in on a phone
+// that was offline at the time (matched case-insensitively, added if new).
+async function findSupervisor(Supervisor, supervisorId, supervisorName) {
+  if (supervisorId) return Supervisor.findById(supervisorId);
+  const name = String(supervisorName).trim().replace(/\s+/g, ' ');
+  const existing = await Supervisor.find({}, { name: 1 });
+  return existing.find((s) => s.name.toLowerCase() === name.toLowerCase()) || Supervisor.create({ name });
+}
+
 // Upsert on (date, shift, work order, level, supervisor) — one record per gang.
 const upsertUgProduction = asyncHandler(async (req, res) => {
   const { UgProduction, Level, Supervisor } = req.projectModels;
-  const { date, shift, workOrderId, levelId, supervisorId, tubs, remark } = req.body;
+  const { date, shift, workOrderId, levelId, supervisorName, tubs, remark } = req.body;
 
-  if (!date || !shift || !levelId || !supervisorId) {
-    throw new AppError('date, shift, levelId and supervisorId are required', 400);
+  if (!date || !shift || !levelId || !(req.body.supervisorId || supervisorName?.trim())) {
+    throw new AppError('date, shift, levelId and supervisorId (or supervisorName) are required', 400);
   }
   if (tubs === '' || tubs == null) throw new AppError('Tubs is required', 400);
   const workOrder = await findWorkOrder(req.projectModels, workOrderId);
 
-  const [level, supervisor] = await Promise.all([Level.findById(levelId), Supervisor.findById(supervisorId)]);
+  const level = await Level.findById(levelId);
   if (!level) throw new AppError('Level not found', 404);
-  if (!supervisor) throw new AppError('Supervisor not found', 404);
   assertLevelOnWorkOrder(workOrder, level);
+  const supervisor = await findSupervisor(Supervisor, req.body.supervisorId, supervisorName);
+  if (!supervisor) throw new AppError('Supervisor not found', 404);
+  const supervisorId = supervisor._id;
 
   const setFields = {
     date: new Date(date),

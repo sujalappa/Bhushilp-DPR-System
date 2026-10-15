@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import * as authApi from '../api/auth';
+import { clearCache, rememberUser } from '../offline/cache';
+import { clearOutbox } from '../offline/outbox';
 
 const AuthContext = createContext(null);
 
@@ -17,12 +19,20 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const loggedInUser = await authApi.login(email, password);
+    // A fresh copy of the lists for whoever this is. The outbox is kept: it's
+    // usually the same person logging back in to send what's waiting.
+    clearCache();
+    rememberUser(loggedInUser);
     setUser(loggedInUser);
     return loggedInUser;
   }, []);
 
   const logout = useCallback(async () => {
+    // Needs the server (offline this throws), or the session cookie would
+    // outlive the log out.
     await authApi.logout();
+    clearCache();
+    clearOutbox();
     setUser(null);
   }, []);
 

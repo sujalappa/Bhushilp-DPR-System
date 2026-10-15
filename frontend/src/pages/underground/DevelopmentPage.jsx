@@ -12,9 +12,12 @@ import DateShiftPicker from '../../components/DateShiftPicker';
 import ManpowerFields from './ManpowerFields';
 import HeadingPicker from './HeadingPicker';
 import { withReferenced } from '../../utils/options';
-import { CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
+import { CREW, CREW_NAME_KEYS, crewNamesFromEntry, crewSummary, crewWorkers, emptyCrew } from '../../utils/crew';
 import { shiftLabel, entryCount } from '../../utils/shift';
 import useWorkOrder from '../../hooks/useWorkOrder';
+import WaitingBadge from './WaitingBadge';
+import { enqueue, itemsFor, removeItem, useOutbox } from '../../offline/outbox';
+import { onSynced } from '../../offline/sync';
 
 // Underground development on one page, inside one work order: date + shift
 // at the top, one entry form, then what's saved for that shift and the
@@ -54,6 +57,9 @@ const fieldsFromEntry = (entry) => ({
 
 const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 const headingLabel = (h) => `${h?.levelId?.name || 'Level'} · ${h?.name || 'Heading'}`;
+const numberOrNull = (v) => (v === '' || v == null ? null : Number(v));
+// An outbox item shown like a saved entry, carrying the item itself.
+const waitingEntry = (item) => ({ ...item.display.entry, _id: `outbox:${item.id}`, outbox: item });
 
 function Entries({ projectId, workOrder, date, shift }) {
   const workOrderId = workOrder._id;
@@ -68,12 +74,27 @@ function Entries({ projectId, workOrder, date, shift }) {
   const [fields, setFields] = useState(emptyFields);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(null); // { text, onPhone }
   const formRef = useRef(null);
+  const outbox = useOutbox();
 
   const reload = useCallback(
     () => undergroundApi.listDevelopment(projectId, workOrderId, date, shift).then(setData),
     [projectId, workOrderId, date, shift]
+  );
+
+  // When a waiting entry of this shift reaches the server, show the
+  // server's copy (and any worker it added) instead.
+  useEffect(
+    () =>
+      onSynced((item) => {
+        const p = item.payload;
+        if (item.kind !== 'ug-development' || item.projectId !== projectId) return;
+        if (p.workOrderId !== workOrderId || p.date !== date || p.shift !== shift) return;
+        reload().catch(() => {});
+        mastersApi.listWorkers(projectId, { active: true }).then(setWorkers).catch(() => {});
+      }),
+    [reload, projectId, workOrderId, date, shift]
   );
 
   useEffect(() => {
@@ -99,7 +120,11 @@ function Entries({ projectId, workOrder, date, shift }) {
   if (loadError) return <ErrorBanner message={loadError} />;
   if (data === null) return <Spinner full />;
 
-  const { entries, progressToDate } = data;
+  const { progressToDate, offline } = data;
+  // Entries waiting on the phone stand in for the saved ones they'll replace.
+  const waiting = itemsFor(outbox, 'ug-development', projectId, workOrderId, date, shift).map(waitingEntry);
+  const waitingHeadings = new Set(waiting.map((e) => e.headingId?._id));
+  const entries = [...data.entries.filter((e) => !waitingHeadings.has(e.headingId?._id)), ...waiting];
   const headingOptions = withReferenced(headings, entries.map((e) => e.headingId));
   const workerOptions = withReferenced(workers, crewWorkers(entries));
   const pendingHeadings = headings.filter((h) => !entries.some((e) => e.headingId?._id === h._id));
@@ -118,7 +143,7 @@ function Entries({ projectId, workOrder, date, shift }) {
     else if (editingEntry) setFields(emptyFields);
     setHeadingId(id);
     setError('');
-    setNotice('');
+    setNotice(null);
   };
 
   const resetForm = () => {
@@ -140,35 +165,68 @@ function Entries({ projectId, workOrder, date, shift }) {
     }
     setSaving(true);
     setError('');
+    const payload = { date, shift, workOrderId, headingId, remark: fields.remark.trim() };
+    NUMERIC_KEYS.forEach((key) => {
+      // An ore drive has no filling; don't keep a value typed before the
+      // heading was switched to one.
+      payload[key] = key === 'filling' && isOreDrive ? '' : fields[key];
+    });
+    CREW_NAME_KEYS.forEach((key) => {
+      payload[key] = fields[key];
+    });
+    const key = [workOrderId, date, shift, headingId].join('|');
+    const waitingCopy = outbox.find((i) => i.kind === 'ug-development' && i.projectId === projectId && i.key === key);
     try {
-      const payload = { date, shift, workOrderId, headingId, remark: fields.remark.trim() };
-      NUMERIC_KEYS.forEach((key) => {
-        // An ore drive has no filling; don't keep a value typed before the
-        // heading was switched to one.
-        payload[key] = key === 'filling' && isOreDrive ? '' : fields[key];
-      });
-      CREW_NAME_KEYS.forEach((key) => {
-        payload[key] = fields[key];
-      });
+      if (!navigator.onLine) {
+        keepOnPhone(key, payload);
+        return;
+      }
       const saved = await undergroundApi.upsertDevelopment(projectId, payload);
+      // The server now has the latest; an older copy waiting on the phone
+      // mustn't be sent over it later.
+      if (waitingCopy) removeItem(waitingCopy.id);
       // Refetched rather than patched locally, because a save also moves
       // the heading's progress to date; the worker list too, since a newly
       // typed name was added to it.
       await Promise.all([reload(), mastersApi.listWorkers(projectId, { active: true }).then(setWorkers)]);
-      setNotice(`${editingEntry ? 'Updated' : 'Saved'}: ${headingLabel(saved.headingId)}`);
+      setNotice({ text: `${editingEntry ? 'Updated' : 'Saved'}: ${headingLabel(saved.headingId)}` });
       resetForm();
       scrollToForm();
     } catch (err) {
-      setError(err.message);
+      if (err.offline) keepOnPhone(key, payload);
+      else setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  // No signal: keep the entry on the phone, shown in the list as waiting.
+  const keepOnPhone = (key, payload) => {
+    const entry = {
+      headingId: heading,
+      ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, numberOrNull(payload[k])])),
+      remark: payload.remark,
+    };
+    CREW.forEach((c) => {
+      const names = fields[c.namesKey].map((n) => n.trim()).filter(Boolean);
+      entry[c.idsKey] = names.map((name) => ({ _id: `name:${name.toLowerCase()}`, name }));
+    });
+    enqueue({ kind: 'ug-development', projectId, key, payload, display: { title: headingLabel(heading), entry } });
+    setNotice({ text: `Saved on this phone: ${headingLabel(heading)}. It will be sent when there's signal.`, onPhone: true });
+    resetForm();
+    scrollToForm();
+  };
+
   const handleDelete = async (entry) => {
+    if (entry.outbox) {
+      if (!window.confirm(`Discard the unsent entry for ${headingLabel(entry.headingId)}?`)) return;
+      removeItem(entry.outbox.id);
+      if (editingEntry?._id === entry._id) resetForm();
+      return;
+    }
     if (!window.confirm(`Delete the entry for ${headingLabel(entry.headingId)}? The heading itself is kept.`)) return;
     setError('');
-    setNotice('');
+    setNotice(null);
     try {
       await undergroundApi.deleteDevelopment(projectId, entry._id);
       if (editingEntry?._id === entry._id) resetForm();
@@ -191,7 +249,15 @@ function Entries({ projectId, workOrder, date, shift }) {
           )}
         </div>
 
-        {notice && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">✓ {notice}</p>}
+        {notice && (
+          <p
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              notice.onPhone ? 'bg-accent-50 text-accent-700' : 'bg-green-50 text-green-700'
+            }`}
+          >
+            {notice.onPhone ? '⏳' : '✓'} {notice.text}
+          </p>
+        )}
 
         <HeadingPicker
           projectId={projectId}
@@ -266,6 +332,12 @@ function Entries({ projectId, workOrder, date, shift }) {
           Saved for {shiftLabel(shift)} · {entryCount(entries.length)}
         </h2>
 
+        {offline && (
+          <p className="mb-2 text-sm text-accent-700">
+            No signal: showing what this phone last loaded. Progress to date updates once it&apos;s back online.
+          </p>
+        )}
+
         {entries.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             Nothing saved for this shift yet.
@@ -295,6 +367,7 @@ function Entries({ projectId, workOrder, date, shift }) {
                     </div>
                     {crewSummary(entry) && <div className="mt-1 text-sm text-slate-500">{crewSummary(entry)}</div>}
                     {entry.remark && <div className="mt-1 text-sm text-slate-500">“{entry.remark}”</div>}
+                    {entry.outbox && <WaitingBadge item={entry.outbox} />}
                   </div>
                   <div className="flex shrink-0 items-center gap-4 text-sm font-medium">
                     <button
@@ -308,7 +381,7 @@ function Entries({ projectId, workOrder, date, shift }) {
                       Edit
                     </button>
                     <button type="button" className="text-red-600" onClick={() => handleDelete(entry)}>
-                      Delete
+                      {entry.outbox ? 'Discard' : 'Delete'}
                     </button>
                   </div>
                 </div>

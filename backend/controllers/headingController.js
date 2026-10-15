@@ -19,6 +19,11 @@ const createHeading = asyncHandler(async (req, res) => {
 
   const level = await Level.findById(levelId);
   if (!level) throw new AppError('Level not found', 404);
+  // One heading per name on a level, so the same work isn't added twice.
+  const onLevel = await Heading.find({ levelId }, { name: 1 });
+  if (onLevel.some((h) => h.name.trim().toLowerCase() === String(name).trim().toLowerCase())) {
+    throw new AppError(`${level.name} · ${String(name).trim()} already exists — pick it from the list`, 409);
+  }
 
   const heading = await Heading.create({
     levelId,

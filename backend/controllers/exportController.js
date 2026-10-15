@@ -167,7 +167,7 @@ async function fetchUgProductionRows(models, query) {
 
   const columns = [
     'Date', 'Shift', 'Work Order', 'Level', 'Supervisor Name',
-    'Supervisor', 'Driller', 'Helper', 'Mucker', 'Blaster', 'Total Manpower',
+    'Supervisor', 'Driller', 'Helper', 'Mucker', 'Blaster', 'Driller + Helper', 'Total Manpower',
     'Tubs', 'Tons', 'M3', 'OMS',
     'Driller Names', 'Helper Names', 'Mucker Names', 'Blaster Names', 'Remark',
   ];
@@ -184,6 +184,7 @@ async function fetchUgProductionRows(models, query) {
       Helper: c.helpers ?? '',
       Mucker: c.muckers ?? '',
       Blaster: c.blasters ?? '',
+      'Driller + Helper': c.drillerHelper,
       'Total Manpower': c.totalManpower,
       Tubs: c.tubs,
       Tons: c.tons,
