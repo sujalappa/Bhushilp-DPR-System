@@ -135,8 +135,11 @@ const listUgProduction = asyncHandler(async (req, res) => {
       entries: entries.map(withComputed),
       monthToDate,
       // Labour and billing cover the whole day (every shift), not just the
-      // shift on screen, matching the daily report.
-      labour: { day: labourAndBilling(dayEntries, workOrder), monthToDate: labourAndBilling(month, workOrder) },
+      // shift on screen, matching the daily report. They're billing
+      // figures, so only the superadmin gets them.
+      labour: req.user.isSuperAdmin
+        ? { day: labourAndBilling(dayEntries, workOrder), monthToDate: labourAndBilling(month, workOrder) }
+        : null,
     },
   });
 });

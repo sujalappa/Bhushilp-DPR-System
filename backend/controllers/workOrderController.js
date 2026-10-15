@@ -33,8 +33,10 @@ const listWorkOrders = asyncHandler(async (req, res) => {
   const { WorkOrder } = req.projectModels;
   const filter = {};
   if (req.query.active !== undefined) filter.active = req.query.active === 'true';
-  const workOrders = await WorkOrder.find(filter).populate(populateLevels).sort({ number: 1 });
-  res.status(200).json({ success: true, data: workOrders });
+  let query = WorkOrder.find(filter).populate(populateLevels).sort({ number: 1 });
+  // Rates and wages are billing information, for the superadmin only.
+  if (!req.user.isSuperAdmin) query = query.select(RATE_KEYS.map((key) => `-${key}`).join(' '));
+  res.status(200).json({ success: true, data: await query });
 });
 
 const createWorkOrder = asyncHandler(async (req, res) => {

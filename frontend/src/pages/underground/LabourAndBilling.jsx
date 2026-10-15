@@ -14,14 +14,48 @@ const PERIODS = [
 // credited at wage + add-on, converted to m³ at the rate per m³, then added
 // to production to give Total Cum and the billing amount. Covers every
 // shift of the day, or the month up to the day.
+//
+// Billing figures are for the superadmin only: the server leaves `labour`
+// out (null) for everyone else, and the section then says so when opened.
 export default function LabourAndBilling({ date, labour }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 p-4 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <span className="font-semibold text-slate-900">Labour and billing</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Admin only</span>
+        </span>
+        <span aria-hidden="true" className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 p-4 pt-3">
+          {labour ? (
+            <Figures date={date} labour={labour} />
+          ) : (
+            <p className="text-sm text-slate-600">Not accessible. Only admins can see labour and billing figures.</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Figures({ date, labour }) {
   const [period, setPeriod] = useState('day');
   const figures = labour[period];
 
   return (
-    <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold text-slate-900">Labour and billing</h2>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex gap-1 rounded-full bg-slate-100 p-1" role="tablist" aria-label="Period">
           {PERIODS.map((p) => (
             <button
@@ -107,6 +141,6 @@ export default function LabourAndBilling({ date, labour }) {
         <dt className="font-medium text-slate-700">Billing amount</dt>
         <dd className="text-right font-semibold tabular-nums text-slate-900">{formatRupees(figures.billingAmount)}</dd>
       </dl>
-    </section>
+    </div>
   );
 }
