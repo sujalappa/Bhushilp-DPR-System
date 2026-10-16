@@ -1,5 +1,5 @@
 const express = require('express');
-const requireSuperAdmin = require('../middleware/requireSuperAdmin');
+const requireProjectManager = require('../middleware/requireProjectManager');
 const requireProjectAccess = require('../middleware/requireProjectAccess');
 const checkAssignment = require('../middleware/checkAssignment');
 const levelController = require('../controllers/levelController');
@@ -12,24 +12,24 @@ const { listUgDevelopment, upsertUgDevelopment, deleteUgDevelopment } = require(
 
 // Master lists follow the same rule as vehicles and drivers: anyone on the
 // project can read the list and add to it inline while filling a form;
-// renaming or deactivating is superadmin-only.
+// renaming or deactivating is for the superadmin and the project's admins.
 function masterRouter({ list, create, update }) {
   const router = express.Router({ mergeParams: true });
   router.get('/', requireProjectAccess, list);
   router.post('/', requireProjectAccess, create);
-  router.patch('/:id', requireSuperAdmin, update);
+  router.patch('/:id', requireProjectManager, update);
   return router;
 }
 
 // Work orders and levels are part of the contract (a work order lists the
 // levels it covers and carries billing rates), so unlike the other masters
-// only a superadmin can add or change them; anyone on the project can read
-// them to fill in their forms.
-function superAdminManagedRouter({ list, create, update }) {
+// only the superadmin and the project's admins can add or change them;
+// anyone on the project can read them to fill in their forms.
+function managerOnlyRouter({ list, create, update }) {
   const router = express.Router({ mergeParams: true });
   router.get('/', requireProjectAccess, list);
-  router.post('/', requireSuperAdmin, create);
-  router.patch('/:id', requireSuperAdmin, update);
+  router.post('/', requireProjectManager, create);
+  router.patch('/:id', requireProjectManager, update);
   return router;
 }
 
@@ -44,8 +44,8 @@ function entryRouter(formSlug, { list, upsert, remove }) {
 }
 
 module.exports = {
-  workOrderRoutes: superAdminManagedRouter({ list: listWorkOrders, create: createWorkOrder, update: updateWorkOrder }),
-  levelRoutes: superAdminManagedRouter(levelController),
+  workOrderRoutes: managerOnlyRouter({ list: listWorkOrders, create: createWorkOrder, update: updateWorkOrder }),
+  levelRoutes: managerOnlyRouter(levelController),
   supervisorRoutes: masterRouter(supervisorController),
   workerRoutes: masterRouter(workerController),
   headingRoutes: masterRouter({ list: listHeadings, create: createHeading, update: updateHeading }),

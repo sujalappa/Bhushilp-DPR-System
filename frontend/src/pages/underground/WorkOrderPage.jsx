@@ -9,6 +9,7 @@ import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
 import { formsForProjectType } from '../../utils/forms';
 import { formatRupees, levelNames, workOrderForms } from '../../utils/workOrder';
+import { hasFormAccess as canUseForm, managesProject } from '../../utils/roles';
 
 // One work order: the forms for entries under it and, for the superadmin,
 // the rates its labour and billing figures use.
@@ -23,8 +24,8 @@ export default function WorkOrderPage() {
     if (missing) navigate(`/projects/${projectId}`, { replace: true });
   }, [missing, navigate, projectId]);
 
-  const hasFormAccess = (slug) =>
-    user.isSuperAdmin || user.assignments.some((a) => a.projectId === projectId && a.forms.includes(slug));
+  const hasFormAccess = (slug) => canUseForm(user, projectId, slug);
+  const canManage = managesProject(user, projectId);
   // The forms this work order has, of those this person may fill in.
   const forms = formsForProjectType('underground').filter(
     (f) => f.implemented && workOrder && workOrderForms(workOrder).includes(f.slug) && hasFormAccess(f.slug)
@@ -62,7 +63,7 @@ export default function WorkOrderPage() {
             ))}
           </div>
 
-          {user.isSuperAdmin &&
+          {canManage &&
             (editing ? (
               <WorkOrderForm
                 projectId={projectId}

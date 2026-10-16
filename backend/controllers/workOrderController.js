@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { WORK_ORDER_FORMS } = require('../models/project/WorkOrder');
+const { managesProject } = require('../utils/roles');
 
 const RATE_KEYS = ['ratePerCubicMetre', 'drillerWage', 'helperWage', 'wageMarkupPct'];
 const FORM_LABELS = { 'ug-production': 'Level Production', 'ug-development': 'Development' };
@@ -52,8 +53,9 @@ const listWorkOrders = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.active !== undefined) filter.active = req.query.active === 'true';
   let query = WorkOrder.find(filter).populate(populateLevels).sort({ number: 1 });
-  // Rates and wages are billing information, for the superadmin only.
-  if (!req.user.isSuperAdmin) query = query.select(RATE_KEYS.map((key) => `-${key}`).join(' '));
+  // Rates and wages are billing information, for the superadmin and the
+  // project's admins only.
+  if (!managesProject(req.user, req.params.projectId)) query = query.select(RATE_KEYS.map((key) => `-${key}`).join(' '));
   res.status(200).json({ success: true, data: await query });
 });
 

@@ -1,15 +1,17 @@
 const AppError = require('../utils/AppError');
+const { managesProject } = require('../utils/roles');
 
 // Factory: checkAssignment('shift-card') returns middleware gating a route
 // to users assigned that form on the :projectId in the URL. This is the real
 // access-control boundary — the frontend's route guard is UX only, this is
-// what actually stops a request. isSuperAdmin bypasses it entirely.
+// what actually stops a request. The superadmin and the project's admins
+// have every form, so they bypass it.
 const checkAssignment = (formSlug) => (req, res, next) => {
-  if (req.user.isSuperAdmin) {
+  const { projectId } = req.params;
+  if (managesProject(req.user, projectId)) {
     return next();
   }
 
-  const { projectId } = req.params;
   const assignment = req.user.assignments.find(
     (a) => a.projectId.toString() === projectId
   );

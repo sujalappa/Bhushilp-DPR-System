@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import OfflineBar from '../offline/OfflineBar';
 import { getItems } from '../offline/outbox';
+import { isManager } from '../utils/roles';
 
 export default function AppShell({ title, backTo, children }) {
   const { user, logout } = useAuth();
@@ -57,7 +58,7 @@ export default function AppShell({ title, backTo, children }) {
                 {/* A dropdown, not two more `hidden sm:inline` links — those
                     would be unreachable on a phone, which is this app's
                     primary device. */}
-                {user?.isSuperAdmin && (
+                {isManager(user) && (
                   <div className="relative">
                     <button
                       onClick={() => setAdminMenuOpen((o) => !o)}

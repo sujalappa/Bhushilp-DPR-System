@@ -1,13 +1,13 @@
 const express = require('express');
-const requireSuperAdmin = require('../middleware/requireSuperAdmin');
+const requireProjectManager = require('../middleware/requireProjectManager');
 const { getPreview, downloadExcel } = require('../controllers/exportController');
 
-// Superadmin-only, deliberately — this reads across every driver/vehicle's
-// full history for backup/reporting purposes, not scoped by form assignment
-// like the rest of the project routes.
+// The superadmin and the project's admins only, deliberately — this reads
+// across every driver/vehicle's full history for backup/reporting purposes,
+// not scoped by form assignment like the rest of the project routes.
 const router = express.Router({ mergeParams: true });
 
-router.use(requireSuperAdmin);
+router.use(requireProjectManager);
 
 router.get('/preview', getPreview);
 router.get('/excel', downloadExcel);

@@ -1,4 +1,5 @@
 const AppError = require('../utils/AppError');
+const { managesProject } = require('../utils/roles');
 
 // Looser than checkAssignment(formSlug): lets a user through if they have
 // *any* assignment on this project, regardless of which form. Used for
@@ -6,11 +7,11 @@ const AppError = require('../utils/AppError');
 // assigned only "shift-card" still needs to read the vehicle list to
 // populate that form's dropdown, even though only a superadmin may edit it.
 function requireProjectAccess(req, res, next) {
-  if (req.user.isSuperAdmin) {
+  const { projectId } = req.params;
+  if (managesProject(req.user, projectId)) {
     return next();
   }
 
-  const { projectId } = req.params;
   const hasAccess = req.user.assignments.some((a) => a.projectId.toString() === projectId);
   if (!hasAccess) {
     throw new AppError('You do not have access to this project', 403);

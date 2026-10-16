@@ -2,6 +2,7 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { toNumberOrNull, round } = require('../utils/numbers');
 const { resolveCrew, crewPopulate } = require('../utils/crew');
+const { managesProject } = require('../utils/roles');
 
 const COUNT_KEYS = ['supervisors', 'drillers', 'helpers', 'muckers', 'blasters'];
 const LEVEL_FIELDS = 'name tonsPerTub tonsPerCubicMetre';
@@ -144,8 +145,8 @@ const listUgProduction = asyncHandler(async (req, res) => {
       monthToDate,
       // Labour and billing cover the whole day (every shift), not just the
       // shift on screen, matching the daily report. They're billing
-      // figures, so only the superadmin gets them.
-      labour: req.user.isSuperAdmin
+      // figures, so only the superadmin and the project's admins get them.
+      labour: managesProject(req.user, req.params.projectId)
         ? { day: labourAndBilling(dayEntries, workOrder), monthToDate: labourAndBilling(month, workOrder) }
         : null,
     },

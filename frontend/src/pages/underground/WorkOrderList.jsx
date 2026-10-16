@@ -7,6 +7,7 @@ import Spinner from '../../components/Spinner';
 import WorkOrderForm from './WorkOrderForm';
 import { WORK_ORDER_DEFAULTS, formNames, levelNames, workOrderForms } from '../../utils/workOrder';
 import { useAuth } from '../../context/AuthContext';
+import { managesProject } from '../../utils/roles';
 
 // An underground project's page lists its work orders; each one opens the
 // forms for entries under that contract. Only a superadmin can add one,
@@ -33,7 +34,7 @@ export default function WorkOrderList({ projectId, canManage }) {
   if (error) return <ErrorBanner message={error} />;
   if (workOrders === null) return <Spinner full />;
 
-  const myForms = user.isSuperAdmin ? null : user.assignments.find((a) => a.projectId === projectId)?.forms || [];
+  const myForms = managesProject(user, projectId) ? null : user.assignments.find((a) => a.projectId === projectId)?.forms || [];
   const shown = myForms ? workOrders.filter((w) => workOrderForms(w).some((f) => myForms.includes(f))) : workOrders;
 
   return (

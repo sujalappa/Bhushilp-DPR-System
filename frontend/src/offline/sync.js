@@ -2,6 +2,7 @@ import * as undergroundApi from '../api/underground';
 import * as mastersApi from '../api/masters';
 import * as projectsApi from '../api/projects';
 import { getItems, markFailed, removeItem, setSyncState } from './outbox';
+import { managesProject } from '../utils/roles';
 
 const SENDERS = {
   'ug-production': undergroundApi.upsertProduction,
@@ -71,7 +72,7 @@ export async function prefetchForOffline(user) {
   const underground = projects.filter(
     (p) =>
       p.type === 'underground' &&
-      (user.isSuperAdmin ||
+      (managesProject(user, p._id) ||
         user.assignments.some((a) => a.projectId === p._id && a.forms.some((f) => f.startsWith('ug-'))))
   );
   await Promise.all(

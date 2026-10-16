@@ -7,6 +7,7 @@ import ErrorBanner from '../components/ErrorBanner';
 import Spinner from '../components/Spinner';
 import { formsForProjectType } from '../utils/forms';
 import WorkOrderList from './underground/WorkOrderList';
+import { hasFormAccess as canUseForm, managesProject } from '../utils/roles';
 
 // The "cards" screen for one project — sits between the project list and
 // an actual form. Which cards appear depends on the project's type: an
@@ -23,8 +24,7 @@ export default function ProjectFormsPage() {
     if (missing) navigate('/projects', { replace: true });
   }, [missing, navigate]);
 
-  const hasFormAccess = (slug) =>
-    user.isSuperAdmin || user.assignments.some((a) => a.projectId === projectId && a.forms.includes(slug));
+  const hasFormAccess = (slug) => canUseForm(user, projectId, slug);
 
   if (error) {
     return (
@@ -50,7 +50,7 @@ export default function ProjectFormsPage() {
   if (project.type === 'underground') {
     return (
       <AppShell title={project.name} backTo="/projects">
-        <WorkOrderList projectId={projectId} canManage={user.isSuperAdmin} />
+        <WorkOrderList projectId={projectId} canManage={managesProject(user, projectId)} />
       </AppShell>
     );
   }

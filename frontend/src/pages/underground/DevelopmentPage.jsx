@@ -19,6 +19,8 @@ import { workOrderForms } from '../../utils/workOrder';
 import WaitingBadge from './WaitingBadge';
 import { enqueue, itemsFor, removeItem, useOutbox } from '../../offline/outbox';
 import { onSynced } from '../../offline/sync';
+import { useAuth } from '../../context/AuthContext';
+import { roleOf } from '../../utils/roles';
 
 // Underground development on one page, inside one work order: date + shift
 // at the top, one entry form, then what's saved for that shift and the
@@ -83,6 +85,11 @@ const waitingEntry = (item) => ({ ...item.display.entry, _id: `outbox:${item.id}
 
 function Entries({ projectId, workOrder, date, shift }) {
   const workOrderId = workOrder._id;
+  const { user } = useAuth();
+  // A supervisor filling in the form supervised it, so their name starts in
+  // the first supervisor box (they can change it).
+  const blankFields =
+    roleOf(user) === 'supervisor' ? { ...emptyFields, supervisorNames: supervisorBoxes([user.name.trim()], 0) } : emptyFields;
   // Only this work order's levels, and the headings on them.
   const levels = workOrder.levelIds;
   const [headings, setHeadings] = useState([]);
@@ -92,7 +99,7 @@ function Entries({ projectId, workOrder, date, shift }) {
   const [loadError, setLoadError] = useState('');
 
   const [headingId, setHeadingId] = useState('');
-  const [fields, setFields] = useState(emptyFields);
+  const [fields, setFields] = useState(blankFields);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(null); // { text, onPhone }
@@ -165,7 +172,7 @@ function Entries({ projectId, workOrder, date, shift }) {
   const selectHeading = (id) => {
     const nextEntry = findEntry(id);
     if (nextEntry) setFields(fieldsFromEntry(nextEntry));
-    else if (editingEntry) setFields(emptyFields);
+    else if (editingEntry) setFields(blankFields);
     setHeadingId(id);
     setError('');
     setNotice(null);
@@ -173,7 +180,7 @@ function Entries({ projectId, workOrder, date, shift }) {
 
   const resetForm = () => {
     setHeadingId('');
-    setFields(emptyFields);
+    setFields(blankFields);
     setError('');
   };
 

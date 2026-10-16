@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import * as authApi from '../api/auth';
 import { clearCache, rememberUser } from '../offline/cache';
 import { clearOutbox } from '../offline/outbox';
+import { isManager } from '../utils/roles';
 
 const AuthContext = createContext(null);
 
@@ -54,7 +55,7 @@ export function useAuth() {
 // a single-purpose data-entry clerk.
 export function getLandingPath(user) {
   if (!user) return '/login';
-  if (user.isSuperAdmin) return '/projects';
+  if (isManager(user)) return '/projects';
   if (user.assignments.length === 1 && user.assignments[0].forms.length === 1) {
     const { projectId, forms } = user.assignments[0];
     // Underground forms live inside a work order, so land on the project's

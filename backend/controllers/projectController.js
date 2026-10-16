@@ -4,6 +4,7 @@ const Project = require('../models/central/Project');
 const { getProjectConnection } = require('../config/projectDb');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { roleOf } = require('../utils/roles');
 
 // MongoDB enforces a 38-byte database name limit (confirmed against the
 // live Atlas cluster), so this stays well under that: "dpr_" (4) +
@@ -21,8 +22,9 @@ const listProjects = asyncHandler(async (req, res) => {
   const filter = { status: 'active' };
   if (req.query.type) filter.type = req.query.type;
 
-  if (!req.user.isSuperAdmin) {
-    filter._id = { $in: req.user.assignments.map((a) => a.projectId) };
+  // Everyone but the superadmin sees the projects they run or work on.
+  if (roleOf(req.user) !== 'superadmin') {
+    filter._id = { $in: [...req.user.adminProjects, ...req.user.assignments.map((a) => a.projectId)] };
   }
 
   const projects = await Project.find(filter).sort({ createdAt: -1 });

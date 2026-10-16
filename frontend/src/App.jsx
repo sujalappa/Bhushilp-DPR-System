@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth, getLandingPath } from './context/AuthContext';
-import { RequireAuth, RequireSuperAdmin, RequireFormAccess } from './routes/ProtectedRoute';
+import { RequireAuth, RequireManager, RequireFormAccess } from './routes/ProtectedRoute';
 import Spinner from './components/Spinner';
 import OfflineSync from './offline/OfflineSync';
 
@@ -108,28 +108,28 @@ export default function App() {
           <Route
             path="/admin/users"
             element={
-              <RequireSuperAdmin>
+              <RequireManager>
                 <ManageUsers />
-              </RequireSuperAdmin>
+              </RequireManager>
             }
           />
           <Route
             path="/admin/export"
             element={
-              <RequireSuperAdmin>
+              <RequireManager>
                 <DataExport />
-              </RequireSuperAdmin>
+              </RequireManager>
             }
           />
 
           <Route
             path="/admin/analysis"
             element={
-              <RequireSuperAdmin>
+              <RequireManager>
                 <Suspense fallback={<Spinner full />}>
                   <Analysis />
                 </Suspense>
-              </RequireSuperAdmin>
+              </RequireManager>
             }
           />
 

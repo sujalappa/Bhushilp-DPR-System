@@ -9,10 +9,19 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
 - **Login → Business line (Mining/Exploration) → Project → Form.** Each
   project gets its **own separate MongoDB database** — one small central
   database (`dpr_control`) holds users/projects/auth only.
-- **Per-form, per-project access control.** A user's `assignments` say
-  exactly which forms they can use on which projects (e.g. a clerk might
-  only have Shift Card on one project). Enforced on the backend in
-  middleware, not just hidden in the UI.
+- **Three roles** (`backend/utils/roles.js`), enforced on the backend in
+  middleware, not just hidden in the UI:
+  - **Superadmin** — everything, every project; creates projects and
+    admins, and picks which projects each admin runs.
+  - **Admin** — everything inside their projects (`adminProjects`): all
+    forms and entries, work orders, levels, rates, labour and billing,
+    export, analysis. Adds the supervisors who work there and ticks their
+    forms.
+  - **Supervisor** — fills in the forms they're assigned (`assignments`,
+    per project and form). On the underground forms their own name is
+    filled in as the supervisor (they can change it).
+  Accounts from before roles existed read as superadmin or supervisor from
+  their old `isSuperAdmin` flag.
 - **Forms live so far:**
   - **Shift Card** — the digitized version of the paper "Tipper/Dumper
     Driver Shift Card". One page: pick date, shift, vehicle and driver, fill

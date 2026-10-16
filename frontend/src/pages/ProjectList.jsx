@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { roleOf } from '../utils/roles';
 import * as projectsApi from '../api/projects';
 import AppShell from '../components/AppShell';
 import Button from '../components/Button';
@@ -82,7 +83,8 @@ export default function ProjectList() {
         ))}
       </div>
 
-      {user.isSuperAdmin && (
+      {/* Only the superadmin starts projects; admins run the ones they're given. */}
+      {roleOf(user) === 'superadmin' && (
         <div className="mt-6">
           {!showNewProject ? (
             <Button variant="accent" className="w-full" onClick={() => setShowNewProject(true)}>

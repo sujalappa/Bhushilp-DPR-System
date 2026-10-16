@@ -1,5 +1,5 @@
 const express = require('express');
-const requireSuperAdmin = require('../middleware/requireSuperAdmin');
+const requireProjectManager = require('../middleware/requireProjectManager');
 const requireProjectAccess = require('../middleware/requireProjectAccess');
 const { list, create, update } = require('../controllers/driverController');
 
@@ -10,6 +10,6 @@ const router = express.Router({ mergeParams: true });
 // superadmin-only.
 router.get('/', requireProjectAccess, list);
 router.post('/', requireProjectAccess, create);
-router.patch('/:id', requireSuperAdmin, update);
+router.patch('/:id', requireProjectManager, update);
 
 module.exports = router;

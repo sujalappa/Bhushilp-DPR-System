@@ -1,6 +1,7 @@
 import { Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
+import { hasFormAccess, isManager } from '../utils/roles';
 
 // Mirrors the backend's `auth` middleware purely for UX (redirect before a
 // doomed API call) — the real access boundary is always server-side.
@@ -11,11 +12,13 @@ export function RequireAuth({ children }) {
   return children;
 }
 
-export function RequireSuperAdmin({ children }) {
+// The admin pages (users, export, analysis): the superadmin and admins,
+// each page showing only the projects that person runs.
+export function RequireManager({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner full />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.isSuperAdmin) return <Navigate to="/projects" replace />;
+  if (!isManager(user)) return <Navigate to="/projects" replace />;
   return children;
 }
 
@@ -28,9 +31,7 @@ export function RequireFormAccess({ formSlug, children }) {
   if (loading) return <Spinner full />;
   if (!user) return <Navigate to="/login" replace />;
 
-  const allowed =
-    user.isSuperAdmin ||
-    user.assignments.some((a) => a.projectId === projectId && a.forms.includes(formSlug));
+  const allowed = hasFormAccess(user, projectId, formSlug);
 
   if (!allowed) return <Navigate to="/projects" replace />;
   return children;

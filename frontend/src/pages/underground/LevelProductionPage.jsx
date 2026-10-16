@@ -22,6 +22,7 @@ import LabourAndBilling from './LabourAndBilling';
 import WaitingBadge from './WaitingBadge';
 import { enqueue, itemsFor, removeItem, useOutbox } from '../../offline/outbox';
 import { onSynced } from '../../offline/sync';
+import { managesProject, roleOf } from '../../utils/roles';
 
 // Underground level production on one page, inside one work order: date +
 // shift at the top, one entry form, then what's saved for that shift, the
@@ -61,6 +62,14 @@ const NUMERIC_KEYS = [...COUNT_KEYS, 'tubs'];
 const emptyFields = { ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, ''])), ...emptyCrew(), remark: '' };
 const emptySelection = { levelId: '', supervisorId: '' };
 
+// A supervisor filling in the form is that gang's supervisor, so their own
+// name is picked for them (they can still pick someone else). Matched to
+// the supervisor list ignoring case; if they aren't on it yet, they're
+// added by name when the entry is saved.
+const ownSupervisorId = (supervisors, name) =>
+  supervisors.find((s) => s.name.trim().toLowerCase() === name.trim().toLowerCase())?._id ||
+  `new:${name.trim()}`;
+
 const fieldsFromEntry = (entry) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, entry[k] ?? ''])),
   ...crewNamesFromEntry(entry),
@@ -96,7 +105,9 @@ function Entries({ projectId, workOrder, date, shift }) {
   const [data, setData] = useState(null); // { entries, monthToDate, labour }
   const [loadError, setLoadError] = useState('');
 
-  const [selection, setSelection] = useState(emptySelection);
+  const [picked, setPicked] = useState(emptySelection);
+  const canManage = managesProject(user, projectId);
+  const isSupervisor = roleOf(user) === 'supervisor';
   const [fields, setFields] = useState(emptyFields);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -160,7 +171,14 @@ function Entries({ projectId, workOrder, date, shift }) {
     levels.filter((l) => workOrderLevelIds.has(l._id)),
     entries.map((e) => e.levelId)
   );
-  const supervisorOptions = withReferenced(supervisors, entries.map((e) => e.supervisorId));
+  const ownId = isSupervisor ? ownSupervisorId(supervisors, user.name) : '';
+  // What's picked, with the supervisor's own name standing in until they
+  // choose otherwise.
+  const selection = { ...picked, supervisorId: picked.supervisorId || ownId };
+  const supervisorOptions = withReferenced(supervisors, [
+    ...entries.map((e) => e.supervisorId),
+    ...(ownId.startsWith('new:') ? [{ _id: ownId, name: user.name.trim() }] : []),
+  ]);
   const workerOptions = withReferenced(workers, crewWorkers(entries));
   const pendingLevels = levelOptions.filter((l) => !entries.some((e) => e.levelId?._id === l._id));
 
@@ -180,13 +198,13 @@ function Entries({ projectId, workOrder, date, shift }) {
     const nextEntry = findEntry(next);
     if (nextEntry) setFields(fieldsFromEntry(nextEntry));
     else if (editingEntry) setFields(emptyFields);
-    setSelection(next);
+    setPicked(next);
     setError('');
     setNotice(null);
   };
 
   const resetForm = () => {
-    setSelection(emptySelection);
+    setPicked(emptySelection);
     setFields(emptyFields);
     setError('');
   };
@@ -308,7 +326,7 @@ function Entries({ projectId, workOrder, date, shift }) {
       <section ref={formRef} className="scroll-mt-28 space-y-4 rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-slate-900">{editingEntry ? 'Edit saved entry' : 'New entry'}</h2>
-          {(selection.levelId || selection.supervisorId) && (
+          {(picked.levelId || picked.supervisorId) && (
             <button type="button" className="text-sm text-slate-500 underline" onClick={resetForm}>
               Clear
             </button>
@@ -335,7 +353,7 @@ function Entries({ projectId, workOrder, date, shift }) {
         {levelOptions.length === 0 && (
           <p className="text-sm text-amber-700">
             No levels on this work order yet.{' '}
-            {user.isSuperAdmin ? 'Add them on the work order page.' : 'Ask the admin to add them.'}
+            {canManage ? 'Add them on the work order page.' : 'Ask the admin to add them.'}
           </p>
         )}
 
@@ -345,7 +363,7 @@ function Entries({ projectId, workOrder, date, shift }) {
             key={level._id}
             projectId={projectId}
             level={level}
-            canEdit={user.isSuperAdmin}
+            canEdit={canManage}
             onSaved={async (updated) => {
               setLevels((list) => list.map((l) => (l._id === updated._id ? updated : l)));
               // Saved entries and month-to-date totals for this level are
@@ -523,7 +541,7 @@ function Entries({ projectId, workOrder, date, shift }) {
         </section>
       )}
 
-      <LabourAndBilling date={date} labour={labour} canView={user.isSuperAdmin} />
+      <LabourAndBilling date={date} labour={labour} canView={canManage} />
     </div>
   );
 }
