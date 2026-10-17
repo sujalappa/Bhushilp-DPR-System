@@ -16,7 +16,9 @@ const SHIFTS = ['I', 'II', 'III', 'General'];
 // `(date, shift) => ReactNode`, rendered below the status card once the
 // shift is working. Date and shift live in the URL (?date=&shift=) so a
 // refresh, or coming back to the tab, keeps the clerk where they were.
-export default function DateShiftPicker({ projectId, children }) {
+// `alsoNonWorking` renders the children for a non-working shift too, for a
+// form that records why the shift was lost (Equipment Utilization).
+export default function DateShiftPicker({ projectId, alsoNonWorking = false, children }) {
   const [params, setParams] = useSearchParams();
   const today = todayIso();
   const rawDate = params.get('date') || '';
@@ -150,7 +152,7 @@ export default function DateShiftPicker({ projectId, children }) {
       <ErrorBanner message={error} />
 
       {status === null && !error && <Spinner full />}
-      {status === 'working' && children(date, shift)}
+      {(status === 'working' || (alsoNonWorking && status === 'non-working')) && children(date, shift)}
     </div>
   );
 }

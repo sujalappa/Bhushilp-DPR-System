@@ -13,7 +13,7 @@ export const ALL_FORMS = [
   { slug: 'fuel', label: 'Daily Fuel Consumption', projectTypes: OPEN_CAST, implemented: true },
   { slug: 'breakdown', label: 'Fleet Breakdown', projectTypes: OPEN_CAST, implemented: false },
   { slug: 'trip-management', label: 'Trip Management', projectTypes: OPEN_CAST, implemented: false },
-  { slug: 'utilization', label: 'Equipment Utilization', projectTypes: OPEN_CAST, implemented: false },
+  { slug: 'utilization', label: 'Equipment Utilization', projectTypes: OPEN_CAST, implemented: true },
   { slug: 'site-monitoring', label: 'Daily Site Monitoring', projectTypes: OPEN_CAST, implemented: false },
   { slug: 'ug-production', label: 'Level Production', projectTypes: UNDERGROUND, implemented: true },
   { slug: 'ug-development', label: 'Development', projectTypes: UNDERGROUND, implemented: true },

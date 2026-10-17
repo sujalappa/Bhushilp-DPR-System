@@ -32,6 +32,15 @@ app (Express + MongoDB/Mongoose backend, React/Vite frontend).
   - **Daily Production** — one entry per date+shift. OB Rehandling and Soft
     OB are filled in from the Shift Card.
   - **Daily Fuel Consumption** — one page, one entry per date+vehicle.
+  - **Equipment Utilization** — per shift: every vehicle with a Shift Card,
+    working hours taken from it (closing − starting hrs), plus idle and
+    breakdown hours and a reason; utilization = working ÷ available (8 h
+    a shift). A "whole shift" line records time all equipment lost
+    together (rain, a blockade).
+  - `backend/scripts/importOpenCast.js` imports the open-cast daily
+    reporting workbook (shift sheets, production, utilization) into a
+    project — a dry run by default, `--apply` to write, `--replace` to
+    clear the project first.
 - **Underground projects have their own forms.** A project's type (Open
   Cast, Underground, Exploration) decides which forms it shows. An
   underground project opens on its **work orders** (e.g. 9100005472); the

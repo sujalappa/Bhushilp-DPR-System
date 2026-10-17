@@ -5,6 +5,7 @@ const { withComputed } = require('./dailyProductionController');
 const { withComputed: withFuelComputed } = require('./fuelController');
 const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugProductionController');
 const { getShiftTripsByHandling } = require('../utils/tripCount');
+const { shiftCardHours, computed: withUtilizationComputed } = require('./utilizationController');
 
 const HANDLING_LABELS = { 'ob-rehandling': 'OB Rehandling', 'soft-ob': 'Soft OB' };
 const { crewPopulate, crewNames } = require('../utils/crew');
@@ -149,6 +150,35 @@ async function fetchFuelRows(models, query) {
   return { columns, rows };
 }
 
+// Saved utilization entries; working hours nobody set come from the
+// vehicle's Shift Card, as on the form.
+async function fetchUtilizationRows(models, query) {
+  const filter = buildDateFilter(query);
+  const [entries, cards] = await Promise.all([
+    models.EquipmentUtilization.find(filter).populate('vehicleId', 'name').sort({ date: 1, shift: 1 }),
+    shiftCardHours(models, filter),
+  ]);
+
+  const columns = ['Date', 'Shift', 'Equipment', 'Operator', 'Available Hrs', 'Working Hrs', 'Idle Hrs', 'Breakdown Hrs', 'Utilization %', 'Remarks'];
+  const rows = entries.map((e) => {
+    const card = e.vehicleId ? cards.get(`${e.date.toISOString()}|${e.shift}|${e.vehicleId._id}`) : null;
+    const c = withUtilizationComputed(e, card?.hours);
+    return {
+      Date: toDateOnly(e.date),
+      Shift: e.shift,
+      Equipment: e.vehicleId?.name || 'Whole shift (all equipment)',
+      Operator: card?.operators.join(', ') || '',
+      'Available Hrs': e.vehicleId ? c.availableHrs : '',
+      'Working Hrs': c.workingHrs ?? '',
+      'Idle Hrs': c.idleHrs ?? '',
+      'Breakdown Hrs': c.breakdownHrs ?? '',
+      'Utilization %': e.vehicleId ? c.utilizationPct ?? '' : '',
+      Remarks: e.remark || '',
+    };
+  });
+  return { columns, rows };
+}
+
 // Who did each job, as comma-separated names. Expects the crew populated.
 const crewNameColumns = (entry) => ({
   'Driller Names': crewNames(entry, 'drillerIds'),
@@ -240,6 +270,7 @@ const OPEN_CAST_DATASETS = [
   { key: 'shiftStatus', sheet: 'Shift Status', fetch: fetchShiftStatusRows },
   { key: 'production', sheet: 'Daily Production', fetch: fetchProductionRows },
   { key: 'fuel', sheet: 'Fuel Consumption', fetch: fetchFuelRows },
+  { key: 'utilization', sheet: 'Equipment Utilization', fetch: fetchUtilizationRows },
 ];
 const UNDERGROUND_DATASETS = [
   { key: 'ugProduction', sheet: 'Level Production', fetch: fetchUgProductionRows },

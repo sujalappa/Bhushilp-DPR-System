@@ -11,6 +11,7 @@ import ProjectFormsPage from './pages/ProjectFormsPage';
 import ShiftCardPage from './pages/shiftCard/ShiftCardPage';
 import ProductionDatePage from './pages/production/ProductionDatePage';
 import FuelPage from './pages/fuel/FuelPage';
+import UtilizationPage from './pages/utilization/UtilizationPage';
 import LevelProductionPage from './pages/underground/LevelProductionPage';
 import DevelopmentPage from './pages/underground/DevelopmentPage';
 import WorkOrderPage from './pages/underground/WorkOrderPage';
@@ -76,6 +77,15 @@ export default function App() {
             element={
               <RequireFormAccess formSlug="fuel">
                 <FuelPage />
+              </RequireFormAccess>
+            }
+          />
+
+          <Route
+            path="/projects/:projectId/utilization"
+            element={
+              <RequireFormAccess formSlug="utilization">
+                <UtilizationPage />
               </RequireFormAccess>
             }
           />

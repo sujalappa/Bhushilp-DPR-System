@@ -55,7 +55,10 @@ const fieldsFromLog = (log) => ({
 // Blank goes up as null (not omitted) so clearing a previously saved value
 // actually clears it.
 const toNumberOrNull = (v) => (v === '' ? null : Number(v));
-const difference = (start, close) => (start !== '' && close !== '' ? Number(close) - Number(start) : null);
+// Readings like 246 − 243.8 come out as 2.1999999999999886 in floating
+// point; two decimals is all a meter shows.
+const round2 = (n) => Math.round(n * 100) / 100;
+const difference = (start, close) => (start !== '' && close !== '' ? round2(Number(close) - Number(start)) : null);
 
 function describe(log) {
   return `${log.vehicleId?.name || 'Vehicle'} · ${log.driverId?.name || 'No driver'}`;
@@ -416,8 +419,8 @@ function ShiftEntries({ projectId, date, shift }) {
 
 function SavedEntry({ log, active, tripsOpen, onToggleTrips, onEdit, onDelete, children }) {
   const working = log.status === 'working';
-  const km = log.startKm != null && log.closeKm != null ? log.closeKm - log.startKm : null;
-  const hrs = log.startHrs != null && log.closeHrs != null ? log.closeHrs - log.startHrs : null;
+  const km = log.startKm != null && log.closeKm != null ? round2(log.closeKm - log.startKm) : null;
+  const hrs = log.startHrs != null && log.closeHrs != null ? round2(log.closeHrs - log.startHrs) : null;
   const summary = working
     ? [
         `${log.totalTripsManual ?? 0} trips`,

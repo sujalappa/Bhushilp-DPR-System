@@ -12,6 +12,7 @@ module.exports = {
   ShiftStatus: require('./ShiftStatus'),
   DailyProduction: require('./DailyProduction'),
   FuelLog: require('./FuelLog'),
+  EquipmentUtilization: require('./EquipmentUtilization'),
   // Underground projects
   WorkOrder: require('./WorkOrder'),
   Level: require('./Level'),

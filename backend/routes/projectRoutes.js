@@ -11,6 +11,7 @@ const shiftStatusRoutes = require('./shiftStatusRoutes');
 const shiftLogRoutes = require('./shiftLogRoutes');
 const dailyProductionRoutes = require('./dailyProductionRoutes');
 const fuelRoutes = require('./fuelRoutes');
+const utilizationRoutes = require('./utilizationRoutes');
 const exportRoutes = require('./exportRoutes');
 const analysisRoutes = require('./analysisRoutes');
 const underground = require('./undergroundRoutes');
@@ -31,6 +32,7 @@ router.use('/:projectId/shift-status', resolveProjectConn, shiftStatusRoutes);
 router.use('/:projectId/shift-logs', resolveProjectConn, shiftLogRoutes);
 router.use('/:projectId/production', resolveProjectConn, dailyProductionRoutes);
 router.use('/:projectId/fuel', resolveProjectConn, fuelRoutes);
+router.use('/:projectId/utilization', resolveProjectConn, utilizationRoutes);
 router.use('/:projectId/export', resolveProjectConn, exportRoutes);
 router.use('/:projectId/analysis', resolveProjectConn, analysisRoutes);
 

@@ -15,6 +15,7 @@ const OPEN_CAST_TABS = [
   { key: 'shiftStatus', label: 'Shift Status' },
   { key: 'production', label: 'Production' },
   { key: 'fuel', label: 'Fuel' },
+  { key: 'utilization', label: 'Utilization' },
 ];
 const UNDERGROUND_TABS = [
   { key: 'ugProduction', label: 'Level Production' },
