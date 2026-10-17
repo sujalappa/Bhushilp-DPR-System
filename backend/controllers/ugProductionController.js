@@ -123,15 +123,17 @@ const listUgProduction = asyncHandler(async (req, res) => {
   const dayEntries = month.filter((e) => e.date.getTime() === day.getTime());
 
   // Month to date per level, up to and including the selected date — the
-  // workbook's running "CUM." columns, which restart each month.
+  // workbook's running "CUM." columns, which restart each month. Summed
+  // from exact figures and rounded once, so per-entry rounding can't add up.
   const byLevel = new Map();
   month.forEach((e) => {
     const key = e.levelId?._id?.toString() || 'unknown';
     const row = byLevel.get(key) || { levelId: e.levelId?._id, levelName: e.levelId?.name || '', tubs: 0, drillerHelper: 0, tons: 0, cubicMetres: 0 };
     row.tubs += e.tubs || 0;
     row.drillerHelper += e.drillerHelper;
-    row.tons += e.tons;
-    row.cubicMetres += e.cubicMetres;
+    const exact = exactFromTubs(e.tubs, e.levelId);
+    row.tons += exact.tons;
+    row.cubicMetres += exact.cubicMetres;
     byLevel.set(key, row);
   });
   const monthToDate = [...byLevel.values()]
@@ -220,6 +222,7 @@ module.exports = {
   upsertUgProduction,
   deleteUgProduction,
   withComputed,
+  exactFromTubs,
   findWorkOrder,
   assertLevelOnWorkOrder,
   LEVEL_FIELDS,

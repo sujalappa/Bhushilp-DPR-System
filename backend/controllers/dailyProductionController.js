@@ -2,6 +2,7 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getShiftTripsByHandling } = require('../utils/tripCount');
 const { OB_PER_TRIP } = require('../utils/obFactors');
+const { round } = require('../utils/numbers');
 
 // Everything except Hard OB and Target is derived, never stored, so it can't
 // drift from its inputs. OB Rehandling and Soft OB both come from the
@@ -13,7 +14,7 @@ function withComputed(doc, trips) {
   const hardOB = obj.hardOB || 0;
   const obRehandling = (trips['ob-rehandling'] || 0) * OB_PER_TRIP['ob-rehandling'];
   const softOB = (trips['soft-ob'] || 0) * OB_PER_TRIP['soft-ob'];
-  const totalCum = hardOB + softOB + obRehandling;
+  const totalCum = round(hardOB + softOB + obRehandling);
   const achievementPct = obj.target ? Number(((totalCum / obj.target) * 100).toFixed(1)) : null;
   return {
     ...obj,

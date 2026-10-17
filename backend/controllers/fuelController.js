@@ -1,6 +1,7 @@
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertNotBelow } = require('../utils/readings');
+const { round } = require('../utils/numbers');
 
 // Diesel Consumed = fuel that went into the tank (opening + issued) minus
 // what's left (closing) — only meaningful if all three are known. Fuel/KM
@@ -10,7 +11,7 @@ function withComputed(doc) {
   const obj = doc.toObject ? doc.toObject() : doc;
   let dieselConsumed = null;
   if (obj.openingFuel != null && obj.fuelIssued != null && obj.closingFuel != null) {
-    dieselConsumed = obj.openingFuel + obj.fuelIssued - obj.closingFuel;
+    dieselConsumed = round(obj.openingFuel + obj.fuelIssued - obj.closingFuel, 2);
   }
   let fuelPerKm = null;
   if (dieselConsumed != null && obj.openingKm != null && obj.closingKm != null && obj.closingKm > obj.openingKm) {

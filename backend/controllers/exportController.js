@@ -9,6 +9,7 @@ const { shiftCardHours, computed: withUtilizationComputed } = require('./utiliza
 
 const HANDLING_LABELS = { 'ob-rehandling': 'OB Rehandling', 'soft-ob': 'Soft OB' };
 const { crewPopulate, crewNames } = require('../utils/crew');
+const { round } = require('../utils/numbers');
 
 const toDateOnly = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
 
@@ -78,10 +79,11 @@ async function fetchShiftLogRows(models, query) {
     Status: l.status,
     'Starting KM': l.startKm ?? '',
     'Closing KM': l.closeKm ?? '',
-    'Total KM': l.startKm != null && l.closeKm != null ? l.closeKm - l.startKm : '',
+    // Two decimals, like a meter: 229.7 − 228.3 is 1.3999999999999773 otherwise.
+    'Total KM': l.startKm != null && l.closeKm != null ? round(l.closeKm - l.startKm, 2) : '',
     'Starting Hrs': l.startHrs ?? '',
     'Closing Hrs': l.closeHrs ?? '',
-    'Total Hrs': l.startHrs != null && l.closeHrs != null ? l.closeHrs - l.startHrs : '',
+    'Total Hrs': l.startHrs != null && l.closeHrs != null ? round(l.closeHrs - l.startHrs, 2) : '',
     'Fuel Issued': l.fuelOpen ?? '',
     'Fuel Issued KM': l.fuelClose ?? '',
     'Total Trips': l.totalTripsManual ?? '',

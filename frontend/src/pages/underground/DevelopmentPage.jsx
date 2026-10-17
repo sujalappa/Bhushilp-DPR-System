@@ -77,7 +77,8 @@ const supervisorLine = (entry) => {
   return `${names.length === 1 ? 'Supervisor' : 'Supervisors'}: ${names.join(', ')}`;
 };
 
-const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
+// Two decimals at most, like every figure in the app.
+const fmt = (n) => (n == null ? '' : String(Math.round(n * 100) / 100));
 const headingLabel = (h) => `${h?.levelId?.name || 'Level'} · ${h?.name || 'Heading'}`;
 const numberOrNull = (v) => (v === '' || v == null ? null : Number(v));
 // An outbox item shown like a saved entry, carrying the item itself.

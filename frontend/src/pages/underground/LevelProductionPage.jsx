@@ -76,7 +76,8 @@ const fieldsFromEntry = (entry) => ({
   remark: entry.remark || '',
 });
 
-const fmt = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
+// Two decimals at most, like every figure in the app.
+const fmt = (n) => (n == null ? '' : String(Math.round(n * 100) / 100));
 const describe = (entry) => `${entry.levelId?.name || 'Level'} · ${entry.supervisorId?.name || 'Supervisor'}`;
 const numberOrNull = (v) => (v === '' || v == null ? null : Number(v));
 

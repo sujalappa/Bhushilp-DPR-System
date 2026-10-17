@@ -1,7 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { round } = require('../utils/numbers');
 const { OB_PER_TRIP } = require('../utils/obFactors');
-const { withComputed: withUgProductionComputed, LEVEL_FIELDS } = require('./ugProductionController');
+const { withComputed: withUgProductionComputed, exactFromTubs, LEVEL_FIELDS } = require('./ugProductionController');
 
 // One endpoint that turns a project's entries for a date range into the
 // figures the Analysis page charts. It returns plain grouped totals — what
@@ -60,23 +60,26 @@ async function undergroundAnalysis(models, query) {
     const level = e.levelId?.name || 'Unknown level';
     const supervisor = e.supervisorId?.name || 'Unknown';
     const omsCrew = (e.supervisors || 0) + (e.muckers || 0) + (e.blasters || 0);
+    // Totals add up exact figures and are rounded once at the end, so the
+    // per-entry rounding (two decimals) can't accumulate.
+    const { tons, cubicMetres } = exactFromTubs(e.tubs, e.levelId);
 
     totals.tubs += e.tubs || 0;
-    totals.tons += e.tons;
-    totals.cubicMetres += e.cubicMetres;
+    totals.tons += tons;
+    totals.cubicMetres += cubicMetres;
     totals.manpower += e.totalManpower;
     totals.omsCrew += omsCrew;
 
-    add(tonsByDayLevel, [day, level], e.tons);
-    add(dayTotals, [day, 'tons'], e.tons);
+    add(tonsByDayLevel, [day, level], tons);
+    add(dayTotals, [day, 'tons'], tons);
     add(dayTotals, [day, 'manpower'], e.totalManpower);
     add(dayTotals, [day, 'omsCrew'], omsCrew);
-    add(shiftTotals, [e.shift, 'tons'], e.tons);
+    add(shiftTotals, [e.shift, 'tons'], tons);
     add(shiftTotals, [e.shift, 'tubs'], e.tubs);
     add(levelTotals, [level, 'tubs'], e.tubs);
-    add(levelTotals, [level, 'tons'], e.tons);
-    add(levelTotals, [level, 'cubicMetres'], e.cubicMetres);
-    add(supervisorTotals, [supervisor, 'tons'], e.tons);
+    add(levelTotals, [level, 'tons'], tons);
+    add(levelTotals, [level, 'cubicMetres'], cubicMetres);
+    add(supervisorTotals, [supervisor, 'tons'], tons);
     add(supervisorTotals, [supervisor, 'shifts'], 1);
   });
 
