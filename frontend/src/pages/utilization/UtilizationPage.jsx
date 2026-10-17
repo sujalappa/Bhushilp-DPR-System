@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import * as utilizationApi from '../../api/utilization';
-import * as mastersApi from '../../api/masters';
 import AppShell from '../../components/AppShell';
 import Button from '../../components/Button';
 import Field, { inputClass } from '../../components/Field';
@@ -11,9 +10,10 @@ import Spinner from '../../components/Spinner';
 import DateShiftPicker from '../../components/DateShiftPicker';
 import { shiftLabel } from '../../utils/shift';
 
-// Equipment utilization for one shift. Every vehicle with a Shift Card is
-// listed with its working hours already taken from it (closing − starting
-// hrs); the supervisor adds idle and breakdown hours and why. A "whole
+// Equipment utilization for one shift, for the whole fleet. A vehicle with
+// a Shift Card ran, with its working hours taken from it (closing −
+// starting hrs); one without counts as not having run (0%) — nobody has to
+// mark it. The supervisor adds idle and breakdown hours and why. A "whole
 // shift" line holds time every machine lost together (rain, a blockade), so
 // the page also opens on a non-working shift.
 export default function UtilizationPage() {
@@ -32,10 +32,8 @@ const pctTone = (pct) => (pct == null ? 'text-slate-400' : pct >= 75 ? 'text-gre
 
 function Shift({ projectId, date, shift }) {
   const [data, setData] = useState(null); // { shiftHours, wholeShift, vehicles }
-  const [allVehicles, setAllVehicles] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState(null); // 'whole' | vehicleId
-  const [adding, setAdding] = useState(null); // a vehicle without a Shift Card, being added
   const [notice, setNotice] = useState('');
 
   const reload = useCallback(
@@ -45,12 +43,9 @@ function Shift({ projectId, date, shift }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([utilizationApi.listUtilization(projectId, date, shift), mastersApi.listVehicles(projectId, { active: true })])
-      .then(([utilization, vehicles]) => {
-        if (cancelled) return;
-        setData(utilization);
-        setAllVehicles(vehicles);
-      })
+    utilizationApi
+      .listUtilization(projectId, date, shift)
+      .then((utilization) => !cancelled && setData(utilization))
       .catch((err) => !cancelled && setLoadError(err.message));
     return () => {
       cancelled = true;
@@ -60,14 +55,17 @@ function Shift({ projectId, date, shift }) {
   if (loadError) return <ErrorBanner message={loadError} />;
   if (data === null) return <Spinner full />;
 
-  const listed = new Set(data.vehicles.map((v) => v.vehicle._id));
-  const addable = allVehicles.filter((v) => !listed.has(v._id));
+  const ran = data.vehicles.filter((v) => v.ran);
+  const didNotRun = data.vehicles.filter((v) => !v.ran);
+  const withPct = data.vehicles.filter((v) => v.utilizationPct != null);
+  const averagePct = withPct.length
+    ? Math.round((withPct.reduce((sum, v) => sum + v.utilizationPct, 0) / withPct.length) * 10) / 10
+    : null;
 
   const save = async (vehicle, values) => {
     await utilizationApi.upsertUtilization(projectId, { date, shift, vehicleId: vehicle?._id || null, ...values });
     await reload();
     setEditing(null);
-    setAdding(null);
     setNotice(`Saved: ${vehicle ? vehicle.name : 'whole shift'}`);
   };
   const clear = async (entry, label) => {
@@ -114,53 +112,61 @@ function Shift({ projectId, date, shift }) {
         )}
       </section>
 
+      {data.vehicles.length > 0 && (
+        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+          {ran.length} of {data.vehicles.length} vehicles ran
+          {averagePct != null && ` · average utilization ${averagePct}%`}
+        </p>
+      )}
+
       <section>
         <h2 className="mb-2 text-sm font-medium text-slate-600">
-          Vehicles in {shiftLabel(shift)} · {data.vehicles.length}
+          Ran in {shiftLabel(shift)} · {ran.length}
         </h2>
-        {data.vehicles.length === 0 && !adding && (
+        {ran.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
-            No Shift Cards for this shift yet. Vehicles appear here once their Shift Card is saved, or add one below.
+            No Shift Cards for this shift yet.
           </p>
-        )}
-        <div className="space-y-2">
-          {data.vehicles.map((row) => (
-            <VehicleRow
-              key={row.vehicle._id}
-              row={row}
-              shiftHours={data.shiftHours}
-              editing={editing === row.vehicle._id}
-              onEdit={() => setEditing(row.vehicle._id)}
-              onCancel={() => setEditing(null)}
-              onSave={(values) => save(row.vehicle, values)}
-              onClear={row.entry ? () => clear(row.entry, row.vehicle.name) : null}
-            />
-          ))}
-          {adding && (
-            <div className="rounded-lg border border-brand-500 bg-white p-4 shadow-sm">
-              <div className="mb-3 font-medium text-slate-900">{adding.name}</div>
-              <HoursEditor shiftHours={data.shiftHours} onSave={(values) => save(adding, values)} onCancel={() => setAdding(null)} />
-            </div>
-          )}
-        </div>
-        {!adding && addable.length > 0 && (
-          <label className="mt-3 block">
-            <span className="mb-1 block text-sm font-medium text-slate-700">Add a vehicle without a Shift Card</span>
-            <select
-              className={inputClass()}
-              value=""
-              onChange={(e) => setAdding(addable.find((v) => v._id === e.target.value) || null)}
-            >
-              <option value="">Select…</option>
-              {addable.map((v) => (
-                <option key={v._id} value={v._id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        ) : (
+          <div className="space-y-2">
+            {ran.map((row) => (
+              <VehicleRow
+                key={row.vehicle._id}
+                row={row}
+                shiftHours={data.shiftHours}
+                editing={editing === row.vehicle._id}
+                onEdit={() => setEditing(row.vehicle._id)}
+                onCancel={() => setEditing(null)}
+                onSave={(values) => save(row.vehicle, values)}
+                onClear={row.entry ? () => clear(row.entry, row.vehicle.name) : null}
+              />
+            ))}
+          </div>
         )}
       </section>
+
+      {didNotRun.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-sm font-medium text-slate-600">Didn&apos;t run · {didNotRun.length}</h2>
+          <p className="mb-2 text-sm text-slate-500">
+            No Shift Card this shift, so they count as not having run. Add breakdown or idle hours and why, if known.
+          </p>
+          <div className="space-y-2">
+            {didNotRun.map((row) => (
+              <VehicleRow
+                key={row.vehicle._id}
+                row={row}
+                shiftHours={data.shiftHours}
+                editing={editing === row.vehicle._id}
+                onEdit={() => setEditing(row.vehicle._id)}
+                onCancel={() => setEditing(null)}
+                onSave={(values) => save(row.vehicle, values)}
+                onClear={row.entry ? () => clear(row.entry, row.vehicle.name) : null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -172,7 +178,8 @@ function VehicleRow({ row, shiftHours, editing, onEdit, onCancel, onSave, onClea
         <div className="min-w-0">
           <div className="font-medium text-slate-900">{row.vehicle.name}</div>
           {row.operators.length > 0 && <div className="text-sm text-slate-500">{row.operators.join(', ')}</div>}
-          {!editing && (
+          {!editing && !row.ran && !row.entry && <div className="mt-1 text-sm text-slate-500">No Shift Card — didn&apos;t run</div>}
+          {!editing && (row.ran || row.entry) && (
             <div className="mt-1 text-sm text-slate-600">
               Working {fmt(row.workingHrs)}
               {row.idleHrs != null && ` · Idle ${fmt(row.idleHrs)}`}
@@ -188,7 +195,7 @@ function VehicleRow({ row, shiftHours, editing, onEdit, onCancel, onSave, onClea
           </div>
           {!editing && (
             <button type="button" className="text-sm font-medium text-brand-600" onClick={onEdit}>
-              {row.entry ? 'Edit' : 'Add hours'}
+              {row.entry ? 'Edit' : row.ran ? 'Add hours' : 'Add reason'}
             </button>
           )}
         </div>
@@ -197,7 +204,8 @@ function VehicleRow({ row, shiftHours, editing, onEdit, onCancel, onSave, onClea
         <div className="mt-3">
           <HoursEditor
             entry={row.entry}
-            shiftCardHrs={row.shiftCardHrs}
+            ran={row.ran}
+            shiftCardHrs={row.ran ? row.shiftCardHrs : 0}
             shiftHours={shiftHours}
             onSave={onSave}
             onCancel={onCancel}
@@ -213,7 +221,7 @@ const asText = (v) => (v == null ? '' : String(v));
 
 // The hours for one vehicle (or, `whole`, just idle hours and a reason for
 // the whole shift). Working hours start at the Shift Card's figure.
-function HoursEditor({ whole = false, entry, shiftCardHrs, shiftHours, onSave, onCancel, onClear }) {
+function HoursEditor({ whole = false, ran = true, entry, shiftCardHrs, shiftHours, onSave, onCancel, onClear }) {
   const [values, setValues] = useState(() => ({
     availableHrs: asText(entry?.availableHrs ?? shiftHours),
     workingHrs: asText(entry?.workingHrs ?? shiftCardHrs),
@@ -259,7 +267,7 @@ function HoursEditor({ whole = false, entry, shiftCardHrs, shiftHours, onSave, o
             <NumberField label="Available hrs" min="0" max="24" value={values.availableHrs} onChange={set('availableHrs')} />
             <NumberField
               label="Working hrs"
-              hint={shiftCardHrs != null ? `Shift Card: ${fmt(shiftCardHrs)}` : 'No hours on the Shift Card'}
+              hint={!ran ? "No Shift Card — didn't run" : shiftCardHrs != null ? `Shift Card: ${fmt(shiftCardHrs)}` : 'No hours on the Shift Card'}
               min="0"
               max="24"
               value={values.workingHrs}

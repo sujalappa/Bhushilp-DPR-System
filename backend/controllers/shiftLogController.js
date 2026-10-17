@@ -3,6 +3,10 @@ const asyncHandler = require('../utils/asyncHandler');
 const { HANDLING_TYPES } = require('../utils/obFactors');
 const { assertNotBelow } = require('../utils/readings');
 
+// Loading machines record hours on their card but don't haul, so they have
+// no trip count.
+const MACHINE_CATEGORIES = ['excavator', 'loader', 'dozer'];
+
 const listShiftLogs = asyncHandler(async (req, res) => {
   const { ShiftLog } = req.projectModels;
   const { date, shift } = req.query;
@@ -35,7 +39,7 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   const { ShiftLog, Vehicle } = req.projectModels;
   const {
     date, shift, vehicleId, driverId, status,
-    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark, totalTripsManual, handlingType,
+    startKm, closeKm, startHrs, closeHrs, fuelOpen, fuelClose, remark, totalTripsManual, handlingType, shiftLogId,
   } = req.body;
 
   if (!date || !shift || !vehicleId) {
@@ -45,14 +49,22 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
   const vehicle = await Vehicle.findById(vehicleId);
   if (!vehicle) throw new AppError('Vehicle not found', 404);
 
+  // Editing one saved card by its id — how a card saved without a driver
+  // name (e.g. imported from a sheet that left it blank) is corrected:
+  // its driver can be filled in later, or left unrecorded.
+  const existing = shiftLogId ? await ShiftLog.findById(shiftLogId) : null;
+  if (shiftLogId && !existing) throw new AppError('Shift log not found', 404);
+
   const resolvedStatus = status || 'working';
   if (resolvedStatus === 'non-working' && !remark) {
     throw new AppError('A remark is required when marking a vehicle non-working', 400);
   }
-  if (resolvedStatus === 'working' && !driverId) {
+  const keepsUnrecordedDriver = existing && !existing.driverId && !driverId;
+  if (resolvedStatus === 'working' && !driverId && !keepsUnrecordedDriver) {
     throw new AppError('A driver is required to log a working shift segment', 400);
   }
-  if (resolvedStatus === 'working' && (totalTripsManual === '' || totalTripsManual == null)) {
+  const blankTrips = totalTripsManual === '' || totalTripsManual == null;
+  if (resolvedStatus === 'working' && blankTrips && !MACHINE_CATEGORIES.includes(vehicle.category)) {
     throw new AppError('Total Trips is required for a working shift segment', 400);
   }
   if (handlingType !== undefined && !HANDLING_TYPES.includes(handlingType)) {
@@ -82,15 +94,25 @@ const upsertShiftLog = asyncHandler(async (req, res) => {
     // rewards leaderboard) — required, and always wins over however many
     // individual Trip rows happen to exist below (those are detail records
     // only, e.g. loading/unloading time per trip; they're never counted).
-    setFields.totalTripsManual = Number(totalTripsManual);
+    setFields.totalTripsManual = blankTrips ? null : Number(totalTripsManual);
     if (handlingType) setFields.handlingType = handlingType;
   }
 
-  const log = await ShiftLog.findOneAndUpdate(
-    { date: new Date(date), shift, vehicleId, driverId: driverKey },
-    { $set: setFields },
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
-  );
+  let log;
+  if (existing) {
+    const driverChanged = String(existing.driverId || '') !== String(driverKey || '');
+    if (driverChanged && (await ShiftLog.exists({ date: existing.date, shift: existing.shift, vehicleId: existing.vehicleId, driverId: driverKey, _id: { $ne: existing._id } }))) {
+      throw new AppError('This vehicle already has a card with that driver for this shift', 409);
+    }
+    existing.set({ ...setFields, date: existing.date, shift: existing.shift, vehicleId: existing.vehicleId });
+    log = await existing.save();
+  } else {
+    log = await ShiftLog.findOneAndUpdate(
+      { date: new Date(date), shift, vehicleId, driverId: driverKey },
+      { $set: setFields },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+  }
   // Kept consistent with listShiftLogs/getShiftLog, which both populate —
   // otherwise a screen relying on the save response instead of re-fetching
   // would see raw ObjectIds instead of {_id, name}.

@@ -27,9 +27,11 @@ async function shiftCardHours(models, filter) {
 
 // Saved values, with the Shift Card's hours standing in for working hours
 // nobody has set, and utilization = working ÷ available.
-function computed(entry, cardHours) {
+// `ran` is false for a vehicle with no Shift Card this shift: it didn't
+// run, so its working hours are 0 unless someone sets them.
+function computed(entry, cardHours, ran = true) {
   const availableHrs = entry?.availableHrs ?? SHIFT_HOURS;
-  const workingHrs = entry?.workingHrs ?? cardHours ?? null;
+  const workingHrs = entry?.workingHrs ?? (ran ? cardHours ?? null : 0);
   return {
     availableHrs,
     workingHrs,
@@ -39,21 +41,34 @@ function computed(entry, cardHours) {
   };
 }
 
-// Every vehicle with a Shift Card or a saved entry this shift, and the
-// whole-shift entry.
+// Every vehicle of the fleet for the shift, and the whole-shift entry. A
+// vehicle with a Shift Card ran (working hours from the card); one without
+// counts as not having run — worked out here, never saved, so a card filled
+// in late simply turns it into a vehicle that ran. A vehicle counts from
+// the day it was added or its first Shift Card, whichever is earlier (an
+// imported fleet was added after it started running); inactive ones don't.
 const listUtilization = asyncHandler(async (req, res) => {
-  const { EquipmentUtilization } = req.projectModels;
+  const { EquipmentUtilization, Vehicle, ShiftLog } = req.projectModels;
   const { date, shift } = req.query;
   if (!date || !shift) throw new AppError('date and shift are required', 400);
   const day = new Date(date);
+  const endOfDay = new Date(day.getTime() + 24 * 60 * 60 * 1000);
 
-  const [cards, entries] = await Promise.all([
+  const [cards, entries, fleet, firstCards] = await Promise.all([
     shiftCardHours(req.projectModels, { date: day, shift }),
     EquipmentUtilization.find({ date: day, shift }).populate('vehicleId', 'name category'),
+    Vehicle.find({ active: true }, { name: 1, category: 1, createdAt: 1 }),
+    ShiftLog.aggregate([{ $group: { _id: '$vehicleId', first: { $min: '$date' } } }]),
   ]);
+  const firstCardOf = new Map(firstCards.map((f) => [String(f._id), f.first]));
 
   const rows = new Map();
-  cards.forEach((c) => rows.set(String(c.vehicle._id), { vehicle: c.vehicle, operators: c.operators, shiftCardHrs: c.hours, entry: null }));
+  fleet.forEach((v) => {
+    const first = firstCardOf.get(String(v._id));
+    const since = first && first < v.createdAt ? first : v.createdAt;
+    if (since < endOfDay) rows.set(String(v._id), { vehicle: { _id: v._id, name: v.name, category: v.category }, operators: [], shiftCardHrs: null, ran: false, entry: null });
+  });
+  cards.forEach((c) => rows.set(String(c.vehicle._id), { vehicle: c.vehicle, operators: c.operators, shiftCardHrs: c.hours, ran: true, entry: null }));
   let wholeShift = null;
   entries.forEach((e) => {
     if (!e.vehicleId) {
@@ -61,12 +76,12 @@ const listUtilization = asyncHandler(async (req, res) => {
       return;
     }
     const key = String(e.vehicleId._id);
-    const row = rows.get(key) || { vehicle: e.vehicleId, operators: [], shiftCardHrs: null };
+    const row = rows.get(key) || { vehicle: e.vehicleId, operators: [], shiftCardHrs: null, ran: false };
     rows.set(key, { ...row, entry: e });
   });
 
   const vehicles = [...rows.values()]
-    .map((r) => ({ ...r, ...computed(r.entry, r.shiftCardHrs) }))
+    .map((r) => ({ ...r, ...computed(r.entry, r.shiftCardHrs, r.ran) }))
     .sort((a, b) => a.vehicle.name.localeCompare(b.vehicle.name, undefined, { numeric: true }));
 
   res.status(200).json({ success: true, data: { shiftHours: SHIFT_HOURS, wholeShift, vehicles } });

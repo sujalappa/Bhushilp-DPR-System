@@ -164,7 +164,8 @@ async function fetchUtilizationRows(models, query) {
   const columns = ['Date', 'Shift', 'Equipment', 'Operator', 'Available Hrs', 'Working Hrs', 'Idle Hrs', 'Breakdown Hrs', 'Utilization %', 'Remarks'];
   const rows = entries.map((e) => {
     const card = e.vehicleId ? cards.get(`${e.date.toISOString()}|${e.shift}|${e.vehicleId._id}`) : null;
-    const c = withUtilizationComputed(e, card?.hours);
+    // No Shift Card: the vehicle didn't run, so 0 working hours unless set.
+    const c = withUtilizationComputed(e, card?.hours, !e.vehicleId || Boolean(card));
     return {
       Date: toDateOnly(e.date),
       Shift: e.shift,

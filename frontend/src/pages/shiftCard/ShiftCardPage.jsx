@@ -44,7 +44,11 @@ const emptyFields = {
   handlingType: HANDLING_TYPES[0].value,
   remark: '',
 };
-const emptySelection = { vehicleId: '', driverId: '', noDriver: false };
+// `logId` is set when editing a saved card that has no driver name (e.g.
+// imported from a sheet that left it blank): the card is found by id, and a
+// driver can be filled in or left unrecorded. A vehicle that didn't run gets
+// no Shift Card — its idle or breakdown time goes on Equipment Utilization.
+const emptySelection = { vehicleId: '', driverId: '', logId: '' };
 
 const fieldsFromLog = (log) => ({
   ...Object.fromEntries(NUMERIC_KEYS.map((k) => [k, log[k] ?? ''])),
@@ -61,7 +65,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const difference = (start, close) => (start !== '' && close !== '' ? round2(Number(close) - Number(start)) : null);
 
 function describe(log) {
-  return `${log.vehicleId?.name || 'Vehicle'} · ${log.driverId?.name || 'No driver'}`;
+  const driver = log.driverId?.name || (log.status === 'working' ? 'Driver not recorded' : 'No driver');
+  return `${log.vehicleId?.name || 'Vehicle'} · ${driver}`;
 }
 
 function ShiftEntries({ projectId, date, shift }) {
@@ -113,23 +118,24 @@ function ShiftEntries({ projectId, date, shift }) {
   const pendingVehicles = haulVehicles.filter((v) => !logs.some((l) => l.vehicleId?._id === v._id));
 
   const findLog = (s) => {
-    if (!s.vehicleId || (!s.noDriver && !s.driverId)) return null;
-    return (
-      logs.find(
-        (l) => l.vehicleId?._id === s.vehicleId && (s.noDriver ? !l.driverId : l.driverId?._id === s.driverId)
-      ) || null
-    );
+    if (s.logId) return logs.find((l) => l._id === s.logId) || null;
+    if (!s.vehicleId || !s.driverId) return null;
+    return logs.find((l) => l.vehicleId?._id === s.vehicleId && l.driverId?._id === s.driverId) || null;
   };
 
   const editingLog = findLog(selection);
-  const ready = Boolean(selection.vehicleId && (selection.noDriver || selection.driverId));
+  const ready = Boolean(selection.vehicleId && (selection.driverId || selection.logId));
+  // Loading machines (from imported sheets) record hours but don't haul.
+  const selectedVehicle = vehicleOptions.find((v) => v._id === selection.vehicleId);
+  const needsTrips = !(selectedVehicle && isMachine(selectedVehicle));
 
   // Changing vehicle/driver either lands on a saved entry (load it), leaves
   // one (start blank), or moves between two unsaved combinations — in which
   // case whatever has been typed is kept, so correcting a mis-picked driver
   // doesn't wipe the numbers.
   const select = (patch) => {
-    const next = { ...selection, ...patch };
+    // Picking another vehicle leaves the card being edited by id.
+    const next = { ...selection, ...patch, ...(patch.vehicleId !== undefined && patch.vehicleId !== selection.vehicleId ? { logId: '' } : {}) };
     const nextLog = findLog(next);
     if (nextLog) setFields(fieldsFromLog(nextLog));
     else if (editingLog) setFields(emptyFields);
@@ -155,15 +161,11 @@ function ShiftEntries({ projectId, date, shift }) {
   const totalHrs = difference(fields.startHrs, fields.closeHrs);
 
   const handleSave = async () => {
-    if (selection.noDriver && !fields.remark.trim()) {
-      setError('Enter the reason this vehicle had no driver.');
-      return;
-    }
-    if (!selection.noDriver && fields.totalTripsManual === '') {
+    if (needsTrips && fields.totalTripsManual === '') {
       setError('Total Trips is required.');
       return;
     }
-    if (!selection.noDriver && (totalKm < 0 || totalHrs < 0)) {
+    if (totalKm < 0 || totalHrs < 0) {
       setError(totalKm < 0 ? "Closing KM can't be less than Starting KM." : "Closing Hrs can't be less than Starting Hrs.");
       return;
     }
@@ -175,18 +177,16 @@ function ShiftEntries({ projectId, date, shift }) {
         date,
         shift,
         vehicleId: selection.vehicleId,
-        // A vehicle with no driver can't have run, so it's the one kind of
-        // entry that is non-working; any entry with a driver is working.
-        driverId: selection.noDriver ? undefined : selection.driverId,
-        status: selection.noDriver ? 'non-working' : 'working',
+        driverId: selection.driverId || undefined,
+        status: 'working',
         remark: fields.remark.trim(),
+        handlingType: fields.handlingType,
       };
-      if (!selection.noDriver) {
-        NUMERIC_KEYS.forEach((key) => {
-          payload[key] = toNumberOrNull(fields[key]);
-        });
-        payload.handlingType = fields.handlingType;
-      }
+      // A card without a driver name is updated in place, keeping its readings.
+      if (selection.logId) payload.shiftLogId = selection.logId;
+      NUMERIC_KEYS.forEach((key) => {
+        payload[key] = toNumberOrNull(fields[key]);
+      });
 
       const saved = await shiftCardApi.upsertShiftLog(projectId, payload);
       setLogs((prev) => upsertById(prev, saved));
@@ -202,7 +202,10 @@ function ShiftEntries({ projectId, date, shift }) {
   };
 
   const handleEdit = (log) => {
-    select({ vehicleId: log.vehicleId._id, driverId: log.driverId?._id || '', noDriver: !log.driverId });
+    setSelection({ vehicleId: log.vehicleId._id, driverId: log.driverId?._id || '', logId: log.driverId ? '' : log._id });
+    setFields(fieldsFromLog(log));
+    setError('');
+    setNotice('');
     scrollToForm();
   };
 
@@ -232,7 +235,7 @@ function ShiftEntries({ projectId, date, shift }) {
       <section ref={formRef} className="scroll-mt-28 space-y-4 rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-slate-900">{editingLog ? 'Edit saved entry' : 'New entry'}</h2>
-          {(selection.vehicleId || selection.driverId || selection.noDriver) && (
+          {(selection.vehicleId || selection.driverId) && (
             <button type="button" className="text-sm text-slate-500 underline" onClick={resetForm}>
               Clear
             </button>
@@ -253,39 +256,29 @@ function ShiftEntries({ projectId, date, shift }) {
           }}
         />
 
-        {!selection.noDriver && (
-          <PickOrAdd
-            label="Driver"
-            options={driverOptions}
-            value={selection.driverId}
-            onChange={(driverId) => select({ driverId })}
-            onCreate={async (name) => {
-              const driver = await mastersApi.createDriver(projectId, { name });
-              setDrivers((d) => [...d, driver]);
-              return driver;
-            }}
-          />
+        <PickOrAdd
+          label="Driver"
+          options={driverOptions}
+          value={selection.driverId}
+          onChange={(driverId) => select({ driverId })}
+          onCreate={async (name) => {
+            const driver = await mastersApi.createDriver(projectId, { name });
+            setDrivers((d) => [...d, driver]);
+            return driver;
+          }}
+        />
+        {selection.logId && !selection.driverId && (
+          <p className="text-sm text-amber-700">No driver was recorded on this card. Pick one if you know it, or save as it is.</p>
         )}
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="h-5 w-5"
-            checked={selection.noDriver}
-            onChange={(e) => select({ noDriver: e.target.checked, driverId: '' })}
-          />
-          This vehicle had no driver this shift (it didn't run)
-        </label>
-
-        {!ready && <p className="text-sm text-slate-500">Pick a vehicle and a driver to fill in the card.</p>}
-
-        {ready && selection.noDriver && (
-          <Field label="Reason" hint='e.g. "Spare vehicle, not needed this shift"'>
-            <input className={inputClass()} value={fields.remark} onChange={(e) => setField('remark')(e.target.value)} />
-          </Field>
+        {!ready && (
+          <p className="text-sm text-slate-500">
+            Pick a vehicle and a driver to fill in the card. A vehicle that didn&apos;t run needs no card — record its idle
+            or breakdown time on Equipment Utilization.
+          </p>
         )}
 
-        {ready && !selection.noDriver && (
+        {ready && (
           <>
             <div className="grid grid-cols-2 gap-3">
               <NumberField label="Starting KM" value={fields.startKm} onChange={setField('startKm')} />
@@ -306,7 +299,7 @@ function ShiftEntries({ projectId, date, shift }) {
 
             <NumberField
               label="Total Trips"
-              hint="Required. This is the number every calculation uses."
+              hint={needsTrips ? 'Required. This is the number every calculation uses.' : 'Loading machines have no trips; leave blank.'}
               inputMode="numeric"
               min="0"
               value={fields.totalTripsManual}
@@ -359,7 +352,9 @@ function ShiftEntries({ projectId, date, shift }) {
 
       {pendingVehicles.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-medium text-slate-600">Not entered yet ({pendingVehicles.length})</h2>
+          <h2 className="mb-2 text-sm font-medium text-slate-600">
+            No card yet — counts as didn&apos;t run ({pendingVehicles.length})
+          </h2>
           <div className="flex flex-wrap gap-2">
             {pendingVehicles.map((v) => (
               <button
@@ -430,7 +425,7 @@ function SavedEntry({ log, active, tripsOpen, onToggleTrips, onEdit, onDelete, c
       ]
         .filter(Boolean)
         .join(' · ')
-    : 'Did not run';
+    : 'Did not run (older entry — idle time now goes on Equipment Utilization)';
 
   return (
     <div className={`rounded-lg border bg-white p-4 shadow-sm ${active ? 'border-brand-500' : 'border-slate-200'}`}>
@@ -441,9 +436,11 @@ function SavedEntry({ log, active, tripsOpen, onToggleTrips, onEdit, onDelete, c
           {log.remark && <div className="mt-1 text-sm text-slate-500">“{log.remark}”</div>}
         </div>
         <div className="flex shrink-0 items-center gap-4 text-sm font-medium">
-          <button type="button" className="text-brand-600" onClick={onEdit}>
-            Edit
-          </button>
+          {working && (
+            <button type="button" className="text-brand-600" onClick={onEdit}>
+              Edit
+            </button>
+          )}
           <button type="button" className="text-red-600" onClick={onDelete}>
             Delete
           </button>
